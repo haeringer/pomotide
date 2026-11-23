@@ -93,7 +93,7 @@ final class PomodoroTimer {
         isPaused = false
         phaseEnd = Date().addingTimeInterval(pausedRemaining)
         startClock()
-        applyEffects(phaseChanged: false)
+        applyEffects()
     }
 
     func skip() {
@@ -116,7 +116,7 @@ final class PomodoroTimer {
         ticker.volume = settings.tickVolume
         breakSound.volume = settings.breakSoundVolume
         guard isRunning else { return }
-        applyEffects(phaseChanged: false)
+        applyEffects()
     }
 
     // MARK: Cycle
@@ -136,10 +136,13 @@ final class PomodoroTimer {
         phaseEnd = now.addingTimeInterval(phaseDuration)
         startClock()
         // Transition sound at the start and the end of every break, not when the first focus starts.
-        if previous != .idle, previous.isBreak != next.isBreak {
+        var tickFadeIn: TimeInterval = 0
+        if previous != .idle, previous.isBreak != next.isBreak, settings.transitionSound != .none {
             transition.play(settings.transitionSound, volume: settings.transitionVolume)
+            // Let the ticking swell in while the gong or bowl rings out (both last about 6 s).
+            if next == .focus { tickFadeIn = 6 }
         }
-        applyEffects(phaseChanged: true)
+        applyEffects(tickFadeIn: tickFadeIn)
     }
 
     private func advance(completed: Bool) {
@@ -159,11 +162,11 @@ final class PomodoroTimer {
         }
     }
 
-    private func applyEffects(phaseChanged: Bool) {
+    private func applyEffects(tickFadeIn: TimeInterval = 0) {
         ticker.volume = settings.tickVolume
         breakSound.volume = settings.breakSoundVolume
         if phase == .focus, !isPaused {
-            ticker.start(settings.tickSound)
+            ticker.start(settings.tickSound, fadeIn: tickFadeIn)
         } else {
             ticker.stop()
         }

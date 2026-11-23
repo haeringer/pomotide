@@ -26,9 +26,14 @@ final class TickPlayer {
         didSet { applyVolume() }
     }
 
+    /// 0...1 multiplier while fading in; 1 otherwise.
+    private var fadeLevel: Float = 1
+    private var fadeTimer: Timer?
+
     var isPlaying: Bool { scheduler != nil }
 
-    func start(_ sound: TickSound) {
+    /// Starts ticking. With `fadeIn` > 0 the ticks swell from silence over that many seconds.
+    func start(_ sound: TickSound, fadeIn: TimeInterval = 0) {
         guard sound != .off else { return stop() }
         if isPlaying, sound == self.sound { return }
         stop()
@@ -37,6 +42,7 @@ final class TickPlayer {
         self.sound = sound
         sampleRate = format.sampleRate
         engine.connect(node, to: engine.mainMixerNode, format: format)
+        fadeLevel = fadeIn > 0 ? 0 : 1
         applyVolume()
         do {
             try engine.start()
@@ -53,17 +59,39 @@ final class TickPlayer {
         }
         RunLoop.main.add(timer, forMode: .common)
         scheduler = timer
+        if fadeIn > 0 { startFade(over: fadeIn) }
     }
 
     func stop() {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        fadeLevel = 1
         scheduler?.invalidate()
         scheduler = nil
         node.stop()
         engine.stop()
     }
 
+    private func startFade(over seconds: TimeInterval) {
+        let start = Date()
+        let timer = Timer(timeInterval: 1.0 / 20, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let p = min(1, Float(Date().timeIntervalSince(start) / seconds))
+                self.fadeLevel = p * p  // slow start, so the first ticks stay under the ringing gong
+                self.applyVolume()
+                if p >= 1 {
+                    self.fadeTimer?.invalidate()
+                    self.fadeTimer = nil
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fadeTimer = timer
+    }
+
     private func applyVolume() {
-        node.volume = Float(volume) * sound.gain
+        node.volume = Float(volume) * sound.gain * fadeLevel
     }
 
     private var currentSample: AVAudioFramePosition {
