@@ -49,10 +49,7 @@ final class BreakSoundPlayer {
             guard (try? engine.start()) != nil else { return }
             node.play()
         default:
-            let generator = NoiseGenerator(sound)
-            let node = AVAudioSourceNode(format: format) { _, _, frameCount, bufferList in
-                generator.render(frameCount, into: bufferList)
-            }
+            let node = Self.makeNoiseNode(sound, format: format)
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: format)
             engine.mainMixerNode.outputVolume = 0
@@ -113,6 +110,15 @@ final class BreakSoundPlayer {
         let done = rampDone
         rampDone = nil
         done?()
+    }
+
+    /// Must be nonisolated: a closure created inside a @MainActor method inherits that
+    /// isolation, and Swift traps when the audio thread then calls it.
+    private nonisolated static func makeNoiseNode(_ sound: BreakSound, format: AVAudioFormat) -> AVAudioSourceNode {
+        let generator = NoiseGenerator(sound)
+        return AVAudioSourceNode(format: format) { _, _, frameCount, bufferList in
+            generator.render(frameCount, into: bufferList)
+        }
     }
 
     private static func loadWaves() -> AVAudioPCMBuffer? {
