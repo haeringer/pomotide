@@ -33,10 +33,12 @@ struct SettingsView: View {
                 }
 
                 Section("Sound") {
-                    Picker("Ticking", selection: $settings.tickSound) {
+                    Picker("During focus", selection: $settings.tickSound) {
                         ForEach(TickSound.allCases) { Text($0.title).tag($0) }
                     }
-                    if settings.tickSound != .off {
+                    if settings.tickSound == .appleMusic {
+                        MusicSettings()
+                    } else if settings.tickSound != .off {
                         Slider(value: $settings.tickVolume, in: 0...1) { Text("Volume") }
                     }
                     Picker("Start and end of break", selection: $settings.transitionSound) {
@@ -77,12 +79,46 @@ struct SettingsView: View {
             .formStyle(.grouped)
             .frame(height: 520)
         }
-        .onChange(of: settings.tickSound) { timer.settingsChanged() }
+        .onChange(of: settings.tickSound) {
+            if settings.tickSound == .appleMusic { timer.music.loadPlaylists() }
+            timer.settingsChanged()
+        }
         .onChange(of: settings.tickVolume) { timer.settingsChanged() }
         .onChange(of: settings.breakSound) { timer.settingsChanged() }
         .onChange(of: settings.breakSoundVolume) { timer.settingsChanged() }
         .onChange(of: settings.silenceDuringBreak) { timer.settingsChanged() }
         .onChange(of: settings.silenceDuringFocus) { timer.settingsChanged() }
+    }
+}
+
+private struct MusicSettings: View {
+    @Environment(PomodoroTimer.self) private var timer
+    @Environment(Settings.self) private var settings
+
+    var body: some View {
+        @Bindable var settings = settings
+        Picker("Playlist", selection: $settings.musicPlaylist) {
+            Text("Continue last played").tag("")
+            if !settings.musicPlaylist.isEmpty, !timer.music.playlists.contains(settings.musicPlaylist) {
+                Text(settings.musicPlaylist).tag(settings.musicPlaylist)
+            }
+            ForEach(timer.music.playlists, id: \.self) { Text($0).tag($0) }
+        }
+        if !settings.musicPlaylist.isEmpty {
+            Toggle("Shuffle", isOn: $settings.musicShuffle)
+        }
+        Toggle("Open Music if it is not running", isOn: $settings.musicOpenIfNeeded)
+        if let problem = timer.music.problem {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                Button("Open Automation Settings…") { timer.music.openAutomationSettings() }
+            }
+        }
+        Text("Music pauses during breaks and continues where it stopped. Music you started yourself is left alone.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .task { if timer.music.playlists.isEmpty, timer.music.isRunning { timer.music.loadPlaylists() } }
     }
 }
 

@@ -1,8 +1,9 @@
 import Foundation
 import Observation
 
+/// What plays during focus: recorded ticking, Apple Music or nothing.
 enum TickSound: String, CaseIterable, Identifiable {
-    case wallClock, quartzClock, off
+    case wallClock, quartzClock, appleMusic, off
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ enum TickSound: String, CaseIterable, Identifiable {
         switch self {
         case .wallClock: "Wall Clock"
         case .quartzClock: "Quartz Clock"
+        case .appleMusic: "Apple Music"
         case .off: "Off"
         }
     }
@@ -19,7 +21,7 @@ enum TickSound: String, CaseIterable, Identifiable {
         switch self {
         case .wallClock: "wall"
         case .quartzClock: "quartz"
-        case .off: ""
+        case .appleMusic, .off: ""
         }
     }
 
@@ -64,6 +66,10 @@ final class Settings {
 
     var tickSound: TickSound { didSet { defaults.set(tickSound.rawValue, forKey: "tickSound") } }
     var tickVolume: Double { didSet { defaults.set(tickVolume, forKey: "tickVolume") } }
+    /// Playlist name; "" continues whatever Music played last.
+    var musicPlaylist: String { didSet { defaults.set(musicPlaylist, forKey: "musicPlaylist") } }
+    var musicShuffle: Bool { didSet { defaults.set(musicShuffle, forKey: "musicShuffle") } }
+    var musicOpenIfNeeded: Bool { didSet { defaults.set(musicOpenIfNeeded, forKey: "musicOpenIfNeeded") } }
     var transitionSound: TransitionSound { didSet { defaults.set(transitionSound.rawValue, forKey: "transitionSound") } }
     var transitionVolume: Double { didSet { defaults.set(transitionVolume, forKey: "transitionVolume") } }
     var breakSound: BreakSound { didSet { defaults.set(breakSound.rawValue, forKey: "breakSound") } }
@@ -83,6 +89,9 @@ final class Settings {
             "longBreakEvery": 4,
             "tickSound": TickSound.wallClock.rawValue,
             "tickVolume": 0.5,
+            "musicPlaylist": "",
+            "musicShuffle": false,
+            "musicOpenIfNeeded": true,
             "transitionSound": TransitionSound.gong.rawValue,
             "transitionVolume": 0.7,
             "breakSound": BreakSound.off.rawValue,
@@ -98,6 +107,9 @@ final class Settings {
         longBreakEvery = defaults.integer(forKey: "longBreakEvery")
         tickSound = TickSound(rawValue: defaults.string(forKey: "tickSound") ?? "") ?? .wallClock
         tickVolume = defaults.double(forKey: "tickVolume")
+        musicPlaylist = defaults.string(forKey: "musicPlaylist") ?? ""
+        musicShuffle = defaults.bool(forKey: "musicShuffle")
+        musicOpenIfNeeded = defaults.bool(forKey: "musicOpenIfNeeded")
         transitionSound = TransitionSound(rawValue: defaults.string(forKey: "transitionSound") ?? "") ?? .gong
         transitionVolume = defaults.double(forKey: "transitionVolume")
         breakSound = BreakSound(rawValue: defaults.string(forKey: "breakSound") ?? "") ?? .off

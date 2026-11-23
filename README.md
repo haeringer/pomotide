@@ -1,6 +1,6 @@
 # PomoTide
 
-A small Pomodoro timer that lives in the macOS menu bar. It turns on Do Not Disturb by itself, plays natural ticking from real clock recordings and uses the native Liquid Glass design of macOS 26.
+A small Pomodoro timer that lives in the macOS menu bar. Features automatically turning on/off DoNotDisturb mode and playing/stopping playlists from Apple Music.
 
 <p align="center"><img src="docs/screenshot.png" width="340" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons"></p>
 
@@ -8,7 +8,7 @@ A small Pomodoro timer that lives in the macOS menu bar. It turns on Do Not Dist
 
 - Adjustable focus and break length, optional long break after a set number of sessions
 - Remaining time in the menu bar, controls in a popover (start, pause, skip, stop)
-- Ticking during focus from real clock recordings (wall clock or quartz clock)
+- Ticking during focus from real clock recordings (wall clock or quartz clock), or Apple Music instead: pick a playlist, music pauses during breaks and continues afterwards
 - Gong or singing bowl at the start and end of every break
 - Optional break sound: ocean waves or white, pink or brown noise
 - Do Not Disturb during breaks (on by default) and optionally during focus

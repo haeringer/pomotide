@@ -25,6 +25,7 @@ enum Phase: Equatable {
 final class PomodoroTimer {
     let settings: Settings
     let focus = FocusController()
+    let music = MusicController()
     private let ticker = TickPlayer()
     private let breakSound = BreakSoundPlayer()
     private let transition = TransitionPlayer()
@@ -85,6 +86,7 @@ final class PomodoroTimer {
         isPaused = true
         ticker.stop()
         breakSound.stop()
+        music.pause()
         stopClock()
     }
 
@@ -108,6 +110,7 @@ final class PomodoroTimer {
         stopClock()
         ticker.stop()
         breakSound.stop()
+        music.stop()
         focus.set(false)
     }
 
@@ -165,10 +168,16 @@ final class PomodoroTimer {
     private func applyEffects(tickFadeIn: TimeInterval = 0) {
         ticker.volume = settings.tickVolume
         breakSound.volume = settings.breakSoundVolume
-        if phase == .focus, !isPaused {
+        let focusing = phase == .focus && !isPaused
+        if focusing, settings.tickSound != .appleMusic {
             ticker.start(settings.tickSound, fadeIn: tickFadeIn)
         } else {
             ticker.stop()
+        }
+        if focusing, settings.tickSound == .appleMusic {
+            music.play(playlist: settings.musicPlaylist, shuffle: settings.musicShuffle, openIfNeeded: settings.musicOpenIfNeeded)
+        } else {
+            music.pause()
         }
         if phase.isBreak, !isPaused {
             breakSound.start(settings.breakSound)
