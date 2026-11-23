@@ -25,7 +25,17 @@ enum Phase: Equatable {
 final class PomodoroTimer {
     let settings: Settings
     let focus = FocusController()
-    let music = MusicController()
+    let music = MusicController(app: .appleMusic)
+    let spotify = MusicController(app: .spotify)
+    private var players: [MusicController] { [music, spotify] }
+    /// The music app chosen for focus, if any.
+    private var activePlayer: MusicController? {
+        switch settings.tickSound.musicApp {
+        case .appleMusic: music
+        case .spotify: spotify
+        case nil: nil
+        }
+    }
     private let hotKey = HotKey()
     /// False if another app already uses the shortcut.
     private(set) var hotKeyAvailable = true
@@ -52,7 +62,7 @@ final class PomodoroTimer {
         self.settings = settings
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.music.endFade()
+                self?.players.forEach { $0.quit() }
                 self?.focus.turnOffBlocking()
             }
         }
@@ -116,7 +126,7 @@ final class PomodoroTimer {
         isPaused = true
         ticker.stop()
         breakSound.stop()
-        music.pause()
+        players.forEach { $0.pause() }
         endFadeOut()
         stopClock()
     }
@@ -159,7 +169,7 @@ final class PomodoroTimer {
         stopClock()
         ticker.stop()
         breakSound.stop()
-        music.stop()
+        players.forEach { $0.stop() }
         endFadeOut()
         focus.set(false)
     }
@@ -221,16 +231,17 @@ final class PomodoroTimer {
         ticker.volume = settings.tickVolume
         breakSound.volume = settings.breakSoundVolume
         let focusing = phase == .focus && !isPaused
-        if focusing, settings.tickSound != .appleMusic {
+        if focusing, settings.tickSound.musicApp == nil {
             ticker.start(settings.tickSound, fadeIn: tickFadeIn)
         } else {
             ticker.stop()
         }
-        if focusing, settings.tickSound == .appleMusic {
-            music.play(playlist: settings.musicPlaylist, shuffle: settings.musicShuffle,
-                       openIfNeeded: settings.musicOpenIfNeeded, fadeIn: tickFadeIn)
-        } else {
-            music.pause()
+        let player = focusing ? activePlayer : nil
+        for p in players where p !== player { p.pause() }
+        if let player {
+            let playlist = player.app == .spotify ? SpotifyLink.uri(from: settings.spotifyLink) ?? "" : settings.musicPlaylist
+            player.play(playlist: playlist, shuffle: settings.musicShuffle,
+                        openIfNeeded: settings.musicOpenIfNeeded, fadeIn: tickFadeIn)
         }
         if phase.isBreak, !isPaused {
             breakSound.start(settings.breakSound)
@@ -277,15 +288,15 @@ final class PomodoroTimer {
         }
         let level = Float(max(0, left) / Self.fadeOutDuration)
         ticker.level = level
-        if settings.tickSound == .appleMusic { music.setFadeLevel(level) }
+        activePlayer?.setFadeLevel(level)
     }
 
-    /// Stops a running fade-out. Music's volume is restored by `music.pause()` or here.
+    /// Stops a running fade-out. The music volume is restored by `pause()` or here.
     private func endFadeOut() {
         guard fadeOutTimer != nil else { return }
         fadeOutTimer?.invalidate()
         fadeOutTimer = nil
         ticker.level = 1
-        if phase == .focus, !isPaused { music.endFade() }
+        if phase == .focus, !isPaused { players.forEach { $0.endFade() } }
     }
 }

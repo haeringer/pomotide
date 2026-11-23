@@ -1,7 +1,35 @@
 import AppKit
 import Observation
 
-/// Plays Apple Music during focus and pauses it during breaks, through AppleScript.
+/// A music app PomoTide can control through AppleScript.
+enum MusicApp {
+    case appleMusic, spotify
+
+    var bundleID: String {
+        switch self {
+        case .appleMusic: "com.apple.Music"
+        case .spotify: "com.spotify.client"
+        }
+    }
+
+    /// Name for AppleScript and messages.
+    var name: String {
+        switch self {
+        case .appleMusic: "Music"
+        case .spotify: "Spotify"
+        }
+    }
+
+    /// Seconds after launch before the app answers Apple Events reliably.
+    var launchDelay: TimeInterval {
+        switch self {
+        case .appleMusic: 1.5
+        case .spotify: 3
+        }
+    }
+}
+
+/// Plays Apple Music or Spotify during focus and pauses it during breaks, through AppleScript.
 ///
 /// PomoTide only pauses playback it started itself: if music is already playing
 /// when a focus session starts, it is left alone. After a break, the paused
@@ -9,43 +37,53 @@ import Observation
 @MainActor
 @Observable
 final class MusicController {
-    private static let bundleID = "com.apple.Music"
+    let app: MusicApp
 
+    /// Apple Music playlists; Spotify does not expose its playlists to AppleScript.
     private(set) var playlists: [String] = []
-    /// Last problem talking to Music, shown in settings.
+    /// Last problem talking to the app, shown in settings.
     private(set) var problem: String?
-    /// True when macOS refused PomoTide control over Music.
+    /// True when macOS refused PomoTide control over the app.
     private(set) var needsPermission = false
 
     /// True while the current playback was started (or resumed) by PomoTide.
     private var owned = false
-    /// Music's own volume before a fade began; restored when the fade ends.
+    /// The app's own volume before a fade began; restored when the fade ends.
     /// Also kept in UserDefaults, so a fade cut short by quitting is undone on the next launch.
     private var baseVolume: Int? {
         didSet {
             if let baseVolume {
-                UserDefaults.standard.set(baseVolume, forKey: Self.pendingVolumeKey)
+                UserDefaults.standard.set(baseVolume, forKey: pendingVolumeKey)
             } else {
-                UserDefaults.standard.removeObject(forKey: Self.pendingVolumeKey)
+                UserDefaults.standard.removeObject(forKey: pendingVolumeKey)
             }
         }
     }
-    private static let pendingVolumeKey = "musicVolumeToRestore"
+    private var pendingVolumeKey: String {
+        app == .appleMusic ? "musicVolumeToRestore" : "spotifyVolumeToRestore"
+    }
     private var lastSetVolume: Int?
     private var fadeInTimer: Timer?
     private var restoreTimer: Timer?
 
-    init() {
+    init(app: MusicApp) {
+        self.app = app
         restoreInterruptedFade()
     }
 
+    /// Every AppleScript call is guarded by this: a script naming an app that is
+    /// not installed would make macOS ask the user where the app is.
     var isRunning: Bool {
-        !NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleID).isEmpty
+        !NSRunningApplication.runningApplications(withBundleIdentifier: app.bundleID).isEmpty
+    }
+
+    var isInstalled: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) != nil
     }
 
     /// Starts or resumes music for a focus phase.
     /// - Parameters:
-    ///   - playlist: playlist name, or "" to continue whatever Music played last.
+    ///   - playlist: Apple Music playlist name or Spotify URI, or "" to continue whatever played last.
     ///   - fadeIn: seconds to swell in from silence; 0 starts at full volume.
     func play(playlist: String, shuffle: Bool, openIfNeeded: Bool, fadeIn: TimeInterval = 0) {
         if isRunning {
@@ -55,27 +93,26 @@ final class MusicController {
         }
     }
 
-    /// Puts back Music's volume if PomoTide quit in the middle of a fade.
+    /// Puts back the app's volume if PomoTide quit in the middle of a fade.
     private func restoreInterruptedFade() {
         guard baseVolume == nil, isRunning,
-              UserDefaults.standard.object(forKey: Self.pendingVolumeKey) != nil else { return }
-        let v = UserDefaults.standard.integer(forKey: Self.pendingVolumeKey)
-        run("tell application \"Music\" to set sound volume to \(v)")
-        if problem == nil { UserDefaults.standard.removeObject(forKey: Self.pendingVolumeKey) }
+              UserDefaults.standard.object(forKey: pendingVolumeKey) != nil else { return }
+        setVolume(UserDefaults.standard.integer(forKey: pendingVolumeKey))
+        if problem == nil { UserDefaults.standard.removeObject(forKey: pendingVolumeKey) }
     }
 
     /// Pauses music that PomoTide started; used for breaks and when the timer is paused.
-    /// If a fade was in progress, Music's volume is restored once playback has really stopped.
+    /// If a fade was in progress, the volume is restored once playback has really stopped.
     func pause() {
         if owned, isRunning, state == "playing" {
-            run("tell application \"Music\" to pause")
+            tell("pause")
             restoreVolumeWhenSilent()
         } else {
             endFade()
         }
     }
 
-    /// Music stops a moment after "pause" returns; restoring the volume right away
+    /// Playback stops a moment after "pause" returns; restoring the volume right away
     /// would let the last fraction of a second play at full volume.
     private func restoreVolumeWhenSilent() {
         fadeInTimer?.invalidate()
@@ -87,7 +124,7 @@ final class MusicController {
             MainActor.assumeIsolated {
                 guard let self else { return }
                 let elapsed = Date().timeIntervalSince(start)
-                // At least 0.5 s for Music's output buffer to drain, at most 3 s.
+                // At least 0.5 s for the output buffer to drain, at most 3 s.
                 guard elapsed >= 0.5, self.state != "playing" || elapsed >= 3 else { return }
                 self.endFade()
             }
@@ -102,20 +139,32 @@ final class MusicController {
         owned = false
     }
 
-    /// Sets Music's volume to `level` (0...1) of its volume before the fade began.
+    /// Stops PomoTide's music before the app quits. Without this, music it started would
+    /// keep playing, and the next launch would take it for the user's own and never pause it.
+    func quit() {
+        if owned, isRunning, state == "playing" {
+            tell("pause")
+            // Let the output drain before the volume goes back up, as in `restoreVolumeWhenSilent`.
+            if baseVolume != nil { Thread.sleep(forTimeInterval: 0.5) }
+        }
+        owned = false
+        endFade()
+    }
+
+    /// Sets the app's volume to `level` (0...1) of its volume before the fade began.
     func setFadeLevel(_ level: Float) {
         guard owned, isRunning else { return }
         if baseVolume == nil {
-            guard let v = run("tell application \"Music\" to get sound volume").flatMap({ Int($0) }) else { return }
+            guard let v = tell("get sound volume").flatMap({ Int($0) }) else { return }
             baseVolume = v
         }
         let target = Int((Float(baseVolume ?? 0) * max(0, min(1, level))).rounded())
         guard target != lastSetVolume else { return }
-        run("tell application \"Music\" to set sound volume to \(target)")
+        tell("set sound volume to \(target)")
         lastSetVolume = target
     }
 
-    /// Ends a fade and puts Music's volume back where it was.
+    /// Ends a fade and puts the app's volume back where it was.
     func endFade() {
         fadeInTimer?.invalidate()
         fadeInTimer = nil
@@ -124,21 +173,22 @@ final class MusicController {
         guard let v = baseVolume else { return }
         baseVolume = nil
         lastSetVolume = nil
-        if isRunning { run("tell application \"Music\" to set sound volume to \(v)") }
+        if isRunning { setVolume(v) }
     }
 
     func loadPlaylists() {
+        guard app == .appleMusic else { return }
         guard isRunning else {
             launch { [weak self] in self?.loadPlaylists() }
             return
         }
         // Music rejects "whose special kind is none", so fetch all names in one call
         // and drop playlist folders, which are user playlists too but cannot be played.
-        guard let names = run("tell application \"Music\" to get name of every user playlist") else {
+        guard let names = tell("get name of every user playlist") else {
             playlists = []
             return
         }
-        let folders = Set(run("tell application \"Music\" to get name of every folder playlist", reportErrors: false)?.split(separator: "\n").map(String.init) ?? [])
+        let folders = Set(tell("get name of every folder playlist", reportErrors: false)?.split(separator: "\n").map(String.init) ?? [])
         playlists = names.split(separator: "\n").map(String.init).filter { !folders.contains($0) }
     }
 
@@ -151,7 +201,16 @@ final class MusicController {
     // MARK: Private
 
     private var state: String? {
-        run("tell application \"Music\" to get player state as string")
+        tell("get player state as string")
+    }
+
+    /// Spotify may set one less than asked, which would lower the volume a little
+    /// with every restored fade; a second call corrects that.
+    private func setVolume(_ v: Int) {
+        tell("set sound volume to \(v)")
+        if app == .spotify, let actual = tell("get sound volume").flatMap({ Int($0) }), actual < v {
+            tell("set sound volume to \(v + (v - actual))")
+        }
     }
 
     private func playNow(playlist: String, shuffle: Bool, fadeIn: TimeInterval) {
@@ -168,14 +227,14 @@ final class MusicController {
             setFadeLevel(0)
         }
         if resuming || playlist.isEmpty {
-            run("tell application \"Music\" to play")
+            tell("play")
         } else {
-            run("""
-                tell application "Music"
-                    set shuffle enabled to \(shuffle)
-                    play playlist "\(Self.escape(playlist))"
-                end tell
-                """)
+            switch app {
+            case .appleMusic:
+                tell("set shuffle enabled to \(shuffle)\nplay playlist \"\(Self.escape(playlist))\"")
+            case .spotify:
+                tell("set shuffling to \(shuffle)\nplay track \"\(Self.escape(playlist))\"")
+            }
         }
         owned = problem == nil
         guard owned else { return endFade() }
@@ -197,31 +256,36 @@ final class MusicController {
     }
 
     private func launch(then action: @escaping @MainActor () -> Void) {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Self.bundleID) else { return }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) else {
+            problem = "\(app.name) is not installed."
+            return
+        }
         let config = NSWorkspace.OpenConfiguration()
         config.activates = false
         config.hides = true
+        let delay = app.launchDelay
         NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
             guard error == nil else { return }
-            // Music needs a moment after launch before it answers Apple Events reliably.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 MainActor.assumeIsolated { action() }
             }
         }
     }
 
-    /// Runs AppleScript on the main thread, as NSAppleScript requires. Calls to a running Music take milliseconds.
+    /// Runs AppleScript commands inside a `tell` block for the app, on the main thread
+    /// as NSAppleScript requires. Calls to a running app take milliseconds.
     @discardableResult
-    private func run(_ source: String, reportErrors: Bool = true) -> String? {
+    private func tell(_ commands: String, reportErrors: Bool = true) -> String? {
         var error: NSDictionary?
+        let source = "tell application \"\(app.name)\"\n\(commands)\nend tell"
         let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
         if let error {
             guard reportErrors else { return nil }
             let code = error[NSAppleScript.errorNumber] as? Int ?? 0
             needsPermission = code == -1743
             problem = needsPermission
-                ? "PomoTide is not allowed to control Music."
-                : (error[NSAppleScript.errorMessage] as? String ?? "Music did not respond.")
+                ? "PomoTide is not allowed to control \(app.name)."
+                : (error[NSAppleScript.errorMessage] as? String ?? "\(app.name) did not respond.")
             return nil
         }
         if reportErrors {
@@ -238,5 +302,28 @@ final class MusicController {
 
     private static func escape(_ s: String) -> String {
         s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+    }
+}
+
+/// Turns a link from Spotify's Share menu into a URI that AppleScript can play.
+enum SpotifyLink {
+    private static let kinds: Set<String> = ["playlist", "album", "artist", "track", "show", "episode"]
+
+    /// Accepts `https://open.spotify.com/playlist/<id>?si=…` (also with an `intl-xx` path
+    /// segment) and `spotify:playlist:<id>`. Returns nil for anything else.
+    static func uri(from text: String) -> String? {
+        let s = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if s.hasPrefix("spotify:") {
+            let parts = s.split(separator: ":")
+            return parts.count == 3 && kinds.contains(String(parts[1])) && isID(parts[2]) ? s : nil
+        }
+        guard let url = URL(string: s), url.host() == "open.spotify.com" else { return nil }
+        let path = url.pathComponents.filter { $0 != "/" && !$0.hasPrefix("intl-") }
+        guard path.count >= 2, kinds.contains(path[0]), isID(path[1]) else { return nil }
+        return "spotify:\(path[0]):\(path[1])"
+    }
+
+    private static func isID(_ s: some StringProtocol) -> Bool {
+        !s.isEmpty && s.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
 }

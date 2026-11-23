@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// What plays during focus: recorded ticking, Apple Music or nothing.
+/// What plays during focus: recorded ticking, a music app or nothing.
 enum TickSound: String, CaseIterable, Identifiable {
-    case wallClock, quartzClock, appleMusic, off
+    case wallClock, quartzClock, appleMusic, spotify, off
 
     var id: String { rawValue }
 
@@ -12,6 +12,7 @@ enum TickSound: String, CaseIterable, Identifiable {
         case .wallClock: "Wall Clock"
         case .quartzClock: "Quartz Clock"
         case .appleMusic: "Apple Music"
+        case .spotify: "Spotify"
         case .off: "Off"
         }
     }
@@ -21,7 +22,15 @@ enum TickSound: String, CaseIterable, Identifiable {
         switch self {
         case .wallClock: "wall"
         case .quartzClock: "quartz"
-        case .appleMusic, .off: ""
+        case .appleMusic, .spotify, .off: ""
+        }
+    }
+
+    var musicApp: MusicApp? {
+        switch self {
+        case .appleMusic: .appleMusic
+        case .spotify: .spotify
+        default: nil
         }
     }
 }
@@ -58,6 +67,9 @@ final class Settings {
     var tickVolume: Double { didSet { defaults.set(tickVolume, forKey: "tickVolume") } }
     /// Playlist name; "" continues whatever Music played last.
     var musicPlaylist: String { didSet { defaults.set(musicPlaylist, forKey: "musicPlaylist") } }
+    /// Spotify link as pasted; "" continues whatever Spotify played last.
+    var spotifyLink: String { didSet { defaults.set(spotifyLink, forKey: "spotifyLink") } }
+    /// Shuffle and open-if-needed apply to Apple Music and Spotify alike.
     var musicShuffle: Bool { didSet { defaults.set(musicShuffle, forKey: "musicShuffle") } }
     var musicOpenIfNeeded: Bool { didSet { defaults.set(musicOpenIfNeeded, forKey: "musicOpenIfNeeded") } }
     var transitionSound: TransitionSound { didSet { defaults.set(transitionSound.rawValue, forKey: "transitionSound") } }
@@ -81,6 +93,7 @@ final class Settings {
             "tickSound": TickSound.wallClock.rawValue,
             "tickVolume": 0.5,
             "musicPlaylist": "",
+            "spotifyLink": "",
             "musicShuffle": false,
             "musicOpenIfNeeded": true,
             "transitionSound": TransitionSound.gong.rawValue,
@@ -100,6 +113,7 @@ final class Settings {
         tickSound = TickSound(rawValue: defaults.string(forKey: "tickSound") ?? "") ?? .wallClock
         tickVolume = defaults.double(forKey: "tickVolume")
         musicPlaylist = defaults.string(forKey: "musicPlaylist") ?? ""
+        spotifyLink = defaults.string(forKey: "spotifyLink") ?? ""
         musicShuffle = defaults.bool(forKey: "musicShuffle")
         musicOpenIfNeeded = defaults.bool(forKey: "musicOpenIfNeeded")
         transitionSound = TransitionSound(rawValue: defaults.string(forKey: "transitionSound") ?? "") ?? .gong

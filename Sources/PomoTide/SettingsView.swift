@@ -39,6 +39,8 @@ struct SettingsView: View {
                     }
                     if settings.tickSound == .appleMusic {
                         MusicSettings()
+                    } else if settings.tickSound == .spotify {
+                        SpotifySettings()
                     } else if settings.tickSound != .off {
                         Slider(value: $settings.tickVolume, in: 0...1) { Text("Volume") }
                     }
@@ -114,19 +116,53 @@ private struct MusicSettings: View {
             Toggle("Shuffle", isOn: $settings.musicShuffle)
         }
         Toggle("Open Music if it is not running", isOn: $settings.musicOpenIfNeeded)
-        if let problem = timer.music.problem {
+        PlayerStatus(player: timer.music)
+            .task { if timer.music.playlists.isEmpty, timer.music.isRunning { timer.music.loadPlaylists() } }
+    }
+}
+
+private struct SpotifySettings: View {
+    @Environment(PomodoroTimer.self) private var timer
+    @Environment(Settings.self) private var settings
+
+    var body: some View {
+        @Bindable var settings = settings
+        // Spotify does not list its playlists for other apps, so it takes a pasted link.
+        TextField("Playlist", text: $settings.spotifyLink, prompt: Text("Continue last played"))
+        if !settings.spotifyLink.isEmpty {
+            if SpotifyLink.uri(from: settings.spotifyLink) == nil {
+                Label("Paste a link from Spotify's Share menu.", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
+            Toggle("Shuffle", isOn: $settings.musicShuffle)
+        }
+        Toggle("Open Spotify if it is not running", isOn: $settings.musicOpenIfNeeded)
+        PlayerStatus(player: timer.spotify)
+    }
+}
+
+/// Problem with the music app, if any, and how PomoTide treats playback.
+private struct PlayerStatus: View {
+    let player: MusicController
+
+    var body: some View {
+        if !player.isInstalled {
+            Label("\(player.app.name) is not installed.", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        } else if let problem = player.problem {
             VStack(alignment: .leading, spacing: 4) {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
-                if timer.music.needsPermission {
-                    Button("Open Automation Settings…") { timer.music.openAutomationSettings() }
+                if player.needsPermission {
+                    Button("Open Automation Settings…") { player.openAutomationSettings() }
                 }
             }
         }
-        Text("Music pauses during breaks and continues where it stopped. Music you started yourself is left alone.")
+        Text(player.app == .spotify
+             ? "Paste a link to a playlist or album, or leave it empty to continue the last one. Spotify pauses during breaks and continues where it stopped. Music you started yourself is left alone."
+             : "Music pauses during breaks and continues where it stopped. Music you started yourself is left alone.")
             .font(.caption)
             .foregroundStyle(.secondary)
-            .task { if timer.music.playlists.isEmpty, timer.music.isRunning { timer.music.loadPlaylists() } }
     }
 }
 

@@ -40,7 +40,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
-    <key>NSAppleEventsUsageDescription</key><string>PomoTide starts Apple Music during focus sessions and pauses it during breaks.</string>
+    <key>NSAppleEventsUsageDescription</key><string>PomoTide starts Apple Music or Spotify during focus sessions and pauses it during breaks.</string>
     <key>NSHumanReadableCopyright</key><string>MIT License</string>
 </dict>
 </plist>
