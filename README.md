@@ -61,8 +61,9 @@ Settings shows "Shortcuts installed" once both are there. Without them the timer
 | `Resources/Shortcuts/` | Signed Focus shortcuts |
 | `tools/prepare_sounds.py` | Cuts and levels the sounds from the source recordings |
 | `tools/make_shortcuts.py` | Generates and signs the shortcuts (needs a Mac signed in to iCloud) |
+| `tools/make_icon.swift` | Draws the app icon into `Resources/AppIcon.icns` |
 
-The generated sounds and shortcuts are committed, so a normal build needs neither tool.
+The generated sounds, shortcuts and icon are committed, so a normal build needs none of the tools.
 
 To release, push a tag like `v0.1.0`. The release workflow builds a universal app, publishes `PomoTide-0.1.0.zip` with its SHA-256, and the cask in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide) then needs the new version and checksum.
 

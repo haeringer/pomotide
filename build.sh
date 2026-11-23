@@ -21,7 +21,7 @@ BIN="$(swift build $FLAGS --show-bin-path)/PomoTide"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/"
-cp -R Resources/Sounds Resources/Shortcuts "$APP/Contents/Resources/"
+cp -R Resources/Sounds Resources/Shortcuts Resources/AppIcon.icns "$APP/Contents/Resources/"
 chmod 644 "$APP"/Contents/Resources/Shortcuts/*
 
 cat > "$APP/Contents/Info.plist" <<EOF
@@ -33,6 +33,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleDisplayName</key><string>PomoTide</string>
     <key>CFBundleIdentifier</key><string>io.github.haeringer.pomotide</string>
     <key>CFBundleExecutable</key><string>PomoTide</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>
     <key>CFBundleVersion</key><string>$VERSION</string>
