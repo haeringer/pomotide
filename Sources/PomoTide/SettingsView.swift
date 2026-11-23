@@ -137,15 +137,19 @@ private struct StartAtLoginToggle: View {
     @State private var problem: String?
 
     var body: some View {
-        Toggle("Start at login", isOn: Binding(get: { enabled }, set: set))
+        // A plain @State binding plus onChange: passing a method as Binding setter
+        // crashes the Swift 6.3 compiler (Xcode 26) in IRGen.
+        Toggle("Start at login", isOn: $enabled)
             .onAppear { enabled = SMAppService.mainApp.status == .enabled }
+            .onChange(of: enabled) { _, on in apply(on) }
         if let problem {
             Label(problem, systemImage: "exclamationmark.triangle")
                 .foregroundStyle(.orange)
         }
     }
 
-    private func set(_ on: Bool) {
+    private func apply(_ on: Bool) {
+        guard on != (SMAppService.mainApp.status == .enabled) else { return }
         do {
             if on {
                 try SMAppService.mainApp.register()
