@@ -137,6 +137,21 @@ final class PomodoroTimer {
         advance(completed: false)
     }
 
+    /// Moves the current phase to `progress` (0 = start, 1 = end), e.g. from dragging the ring.
+    /// Works while running and while paused; the phase length itself stays the same.
+    func seek(to progress: Double) {
+        guard phase != .idle else { return }
+        // Keep at least a second, so dragging to the very end does not switch phases mid-drag.
+        let left = max(1, phaseDuration * (1 - min(1, max(0, progress))))
+        now = Date()
+        if isPaused {
+            pausedRemaining = left
+        } else {
+            phaseEnd = now.addingTimeInterval(left)
+            updateFadeOut()
+        }
+    }
+
     func stop() {
         phase = .idle
         isPaused = false
