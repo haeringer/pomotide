@@ -112,7 +112,9 @@ private struct MusicSettings: View {
             VStack(alignment: .leading, spacing: 4) {
                 Label(problem, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
-                Button("Open Automation Settings…") { timer.music.openAutomationSettings() }
+                if timer.music.needsPermission {
+                    Button("Open Automation Settings…") { timer.music.openAutomationSettings() }
+                }
             }
         }
         Text("Music pauses during breaks and continues where it stopped. Music you started yourself is left alone.")

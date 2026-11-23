@@ -14,6 +14,8 @@ final class MusicController {
     private(set) var playlists: [String] = []
     /// Last problem talking to Music, shown in settings.
     private(set) var problem: String?
+    /// True when macOS refused PomoTide control over Music.
+    private(set) var needsPermission = false
 
     /// True while the current playback was started (or resumed) by PomoTide.
     private var owned = false
@@ -49,8 +51,14 @@ final class MusicController {
             launch { [weak self] in self?.loadPlaylists() }
             return
         }
-        let names = run("tell application \"Music\" to get name of every user playlist whose special kind is none")
-        playlists = names.map { $0.split(separator: "\n").map(String.init) } ?? []
+        // Music rejects "whose special kind is none", so fetch all names in one call
+        // and drop playlist folders, which are user playlists too but cannot be played.
+        guard let names = run("tell application \"Music\" to get name of every user playlist") else {
+            playlists = []
+            return
+        }
+        let folders = Set(run("tell application \"Music\" to get name of every folder playlist", reportErrors: false)?.split(separator: "\n").map(String.init) ?? [])
+        playlists = names.split(separator: "\n").map(String.init).filter { !folders.contains($0) }
     }
 
     func openAutomationSettings() {
@@ -104,17 +112,22 @@ final class MusicController {
 
     /// Runs AppleScript on the main thread, as NSAppleScript requires. Calls to a running Music take milliseconds.
     @discardableResult
-    private func run(_ source: String) -> String? {
+    private func run(_ source: String, reportErrors: Bool = true) -> String? {
         var error: NSDictionary?
         let result = NSAppleScript(source: source)?.executeAndReturnError(&error)
         if let error {
+            guard reportErrors else { return nil }
             let code = error[NSAppleScript.errorNumber] as? Int ?? 0
-            problem = code == -1743
+            needsPermission = code == -1743
+            problem = needsPermission
                 ? "PomoTide is not allowed to control Music."
                 : (error[NSAppleScript.errorMessage] as? String ?? "Music did not respond.")
             return nil
         }
-        problem = nil
+        if reportErrors {
+            problem = nil
+            needsPermission = false
+        }
         guard let result else { return nil }
         if result.descriptorType == typeAEList {
             guard result.numberOfItems > 0 else { return "" }
