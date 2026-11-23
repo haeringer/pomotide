@@ -28,6 +28,11 @@ final class TickPlayer {
 
     /// 0...1 multiplier while fading in; 1 otherwise.
     private var fadeLevel: Float = 1
+
+    /// 0...1 multiplier set from outside, used to fade out at the end of a focus phase.
+    var level: Float = 1 {
+        didSet { applyVolume() }
+    }
     private var fadeTimer: Timer?
 
     var isPlaying: Bool { scheduler != nil }
@@ -66,6 +71,7 @@ final class TickPlayer {
         fadeTimer?.invalidate()
         fadeTimer = nil
         fadeLevel = 1
+        level = 1
         scheduler?.invalidate()
         scheduler = nil
         node.stop()
@@ -91,7 +97,7 @@ final class TickPlayer {
     }
 
     private func applyVolume() {
-        node.volume = Float(volume) * sound.gain * fadeLevel
+        node.volume = Float(volume) * sound.gain * fadeLevel * level
     }
 
     private var currentSample: AVAudioFramePosition {

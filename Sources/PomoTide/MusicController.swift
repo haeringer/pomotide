@@ -19,31 +19,63 @@ final class MusicController {
 
     /// True while the current playback was started (or resumed) by PomoTide.
     private var owned = false
+    /// Music's own volume before a fade began; restored when the fade ends.
+    private var baseVolume: Int?
+    private var lastSetVolume: Int?
+    private var fadeInTimer: Timer?
 
     var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleID).isEmpty
     }
 
     /// Starts or resumes music for a focus phase.
-    /// - Parameter playlist: playlist name, or "" to continue whatever Music played last.
-    func play(playlist: String, shuffle: Bool, openIfNeeded: Bool) {
+    /// - Parameters:
+    ///   - playlist: playlist name, or "" to continue whatever Music played last.
+    ///   - fadeIn: seconds to swell in from silence; 0 starts at full volume.
+    func play(playlist: String, shuffle: Bool, openIfNeeded: Bool, fadeIn: TimeInterval = 0) {
         if isRunning {
-            playNow(playlist: playlist, shuffle: shuffle)
+            playNow(playlist: playlist, shuffle: shuffle, fadeIn: fadeIn)
         } else if openIfNeeded {
-            launch { [weak self] in self?.playNow(playlist: playlist, shuffle: shuffle) }
+            launch { [weak self] in self?.playNow(playlist: playlist, shuffle: shuffle, fadeIn: fadeIn) }
         }
     }
 
     /// Pauses music that PomoTide started; used for breaks and when the timer is paused.
+    /// Restores Music's volume if a fade was in progress.
     func pause() {
-        guard owned, isRunning, state == "playing" else { return }
-        run("tell application \"Music\" to pause")
+        if owned, isRunning, state == "playing" {
+            run("tell application \"Music\" to pause")
+        }
+        endFade()
     }
 
     /// Pauses PomoTide's music and forgets it, so the next session starts the playlist anew.
     func stop() {
         pause()
         owned = false
+    }
+
+    /// Sets Music's volume to `level` (0...1) of its volume before the fade began.
+    func setFadeLevel(_ level: Float) {
+        guard owned, isRunning else { return }
+        if baseVolume == nil {
+            guard let v = run("tell application \"Music\" to get sound volume").flatMap({ Int($0) }) else { return }
+            baseVolume = v
+        }
+        let target = Int((Float(baseVolume ?? 0) * max(0, min(1, level))).rounded())
+        guard target != lastSetVolume else { return }
+        run("tell application \"Music\" to set sound volume to \(target)")
+        lastSetVolume = target
+    }
+
+    /// Ends a fade and puts Music's volume back where it was.
+    func endFade() {
+        fadeInTimer?.invalidate()
+        fadeInTimer = nil
+        guard let v = baseVolume else { return }
+        baseVolume = nil
+        lastSetVolume = nil
+        if isRunning { run("tell application \"Music\" to set sound volume to \(v)") }
     }
 
     func loadPlaylists() {
@@ -73,17 +105,19 @@ final class MusicController {
         run("tell application \"Music\" to get player state as string")
     }
 
-    private func playNow(playlist: String, shuffle: Bool) {
+    private func playNow(playlist: String, shuffle: Bool, fadeIn: TimeInterval) {
         let current = state
         if current == "playing" {
             // Either the user's own music (leave it) or ours (already fine).
             return
         }
-        if owned, current == "paused" {
-            run("tell application \"Music\" to play")
-            return
+        let resuming = owned && current == "paused"
+        // Start silent, so the first moment does not cover the ringing gong.
+        if fadeIn > 0 {
+            owned = true
+            setFadeLevel(0)
         }
-        if playlist.isEmpty {
+        if resuming || playlist.isEmpty {
             run("tell application \"Music\" to play")
         } else {
             run("""
@@ -94,6 +128,22 @@ final class MusicController {
                 """)
         }
         owned = problem == nil
+        guard owned else { return endFade() }
+        if fadeIn > 0 { startFadeIn(over: fadeIn) }
+    }
+
+    private func startFadeIn(over seconds: TimeInterval) {
+        let start = Date()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let p = min(1, Float(Date().timeIntervalSince(start) / seconds))
+                self.setFadeLevel(p * p)  // same curve as the ticking
+                if p >= 1 { self.endFade() }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        fadeInTimer = timer
     }
 
     private func launch(then action: @escaping @MainActor () -> Void) {

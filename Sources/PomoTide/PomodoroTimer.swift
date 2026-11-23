@@ -40,11 +40,17 @@ final class PomodoroTimer {
     private var phaseDuration: TimeInterval = 1
     private var pausedRemaining: TimeInterval = 0
     private var clock: Timer?
+    private var fadeOutTimer: Timer?
+    /// Ticking or music fades out over the last seconds of a focus phase, before the gong.
+    private static let fadeOutDuration: TimeInterval = 5
 
     init(settings: Settings) {
         self.settings = settings
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.focus.turnOffBlocking() }
+            MainActor.assumeIsolated {
+                self?.music.endFade()
+                self?.focus.turnOffBlocking()
+            }
         }
         Task { await focus.refresh() }
     }
@@ -87,6 +93,7 @@ final class PomodoroTimer {
         ticker.stop()
         breakSound.stop()
         music.pause()
+        endFadeOut()
         stopClock()
     }
 
@@ -111,6 +118,7 @@ final class PomodoroTimer {
         ticker.stop()
         breakSound.stop()
         music.stop()
+        endFadeOut()
         focus.set(false)
     }
 
@@ -145,6 +153,7 @@ final class PomodoroTimer {
             // Let the ticking swell in while the gong or bowl rings out (both last about 6 s).
             if next == .focus { tickFadeIn = 6 }
         }
+        endFadeOut()
         applyEffects(tickFadeIn: tickFadeIn)
     }
 
@@ -175,7 +184,8 @@ final class PomodoroTimer {
             ticker.stop()
         }
         if focusing, settings.tickSound == .appleMusic {
-            music.play(playlist: settings.musicPlaylist, shuffle: settings.musicShuffle, openIfNeeded: settings.musicOpenIfNeeded)
+            music.play(playlist: settings.musicPlaylist, shuffle: settings.musicShuffle,
+                       openIfNeeded: settings.musicOpenIfNeeded, fadeIn: tickFadeIn)
         } else {
             music.pause()
         }
@@ -206,5 +216,33 @@ final class PomodoroTimer {
     private func tick() {
         now = Date()
         if !isPaused, now >= phaseEnd { advance(completed: true) }
+        updateFadeOut()
+    }
+
+    // MARK: Fade-out
+
+    private func updateFadeOut() {
+        let left = phaseEnd.timeIntervalSinceNow
+        guard phase == .focus, !isPaused, left <= Self.fadeOutDuration else { return endFadeOut() }
+        if fadeOutTimer == nil {
+            // Finer steps than the 1 Hz clock, which matters for music.
+            let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateFadeOut() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            fadeOutTimer = timer
+        }
+        let level = Float(max(0, left) / Self.fadeOutDuration)
+        ticker.level = level
+        if settings.tickSound == .appleMusic { music.setFadeLevel(level) }
+    }
+
+    /// Stops a running fade-out. Music's volume is restored by `music.pause()` or here.
+    private func endFadeOut() {
+        guard fadeOutTimer != nil else { return }
+        fadeOutTimer?.invalidate()
+        fadeOutTimer = nil
+        ticker.level = 1
+        if phase == .focus, !isPaused { music.endFade() }
     }
 }
