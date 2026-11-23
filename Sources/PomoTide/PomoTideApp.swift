@@ -24,7 +24,7 @@ struct MenuBarLabel: View {
         case (.idle, _): "timer"
         case (_, true): "pause.circle"
         case (.focus, _): "timer"
-        default: "cup.and.saucer"
+        default: "figure.mind.and.body"
         }
         if timer.phase != .idle, timer.settings.showTimeInMenuBar {
             Image(nsImage: Self.pill(symbol: symbol, text: timer.remainingText))
