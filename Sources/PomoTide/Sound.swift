@@ -2,8 +2,9 @@ import AVFoundation
 
 /// Plays an analog-sounding clock tick.
 ///
-/// Each tick is picked at random from 24 recorded single ticks, alternating
-/// between "tick" and "tock" recordings, with slight random loudness and timing.
+/// Each tick is picked at random from a set of recorded single ticks, with slight
+/// random loudness and timing. Files named `<prefix>_tick_*` and `<prefix>_tock_*`
+/// alternate; other files fit either beat.
 /// The samples are played unmodified at their own sample rate.
 /// The audio engine only runs while ticking.
 @MainActor
@@ -122,10 +123,12 @@ final class TickPlayer {
     private func load(_ sound: TickSound) {
         guard loaded != sound else { return }
         ticks = [[], []]
-        for (i, buffer) in Self.loadBuffers(prefix: sound.filePrefix).enumerated() {
-            ticks[i % 2].append(buffer)
-            if let quieter = Self.scaled(buffer, by: Float.random(in: 0.8...0.9)) {
-                ticks[i % 2].append(quieter)
+        for (name, buffer) in Self.loadBuffers(prefix: sound.filePrefix) {
+            let beats = name.contains("_tock_") ? [1] : name.contains("_tick_") ? [0] : [0, 1]
+            let quieter = Self.scaled(buffer, by: Float.random(in: 0.8...0.9))
+            for b in beats {
+                ticks[b].append(buffer)
+                if let quieter { ticks[b].append(quieter) }
             }
         }
         loaded = sound
@@ -142,7 +145,7 @@ final class TickPlayer {
         return copy
     }
 
-    private static func loadBuffers(prefix: String) -> [AVAudioPCMBuffer] {
+    private static func loadBuffers(prefix: String) -> [(name: String, buffer: AVAudioPCMBuffer)] {
         guard let dir = Bundle.main.resourceURL?.appending(path: "Sounds") else { return [] }
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         return files
@@ -153,7 +156,7 @@ final class TickPlayer {
                       let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
                       (try? file.read(into: buffer)) != nil
                 else { return nil }
-                return buffer
+                return (url.lastPathComponent, buffer)
             }
     }
 }
