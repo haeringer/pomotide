@@ -3,18 +3,21 @@
 
 Usage: tools/prepare_sounds.py <raw-dir>
 
-<raw-dir> must contain the two source files from Wikimedia Commons, converted
+<raw-dir> must contain the source files from Wikimedia Commons, converted
 to 16-bit mono 44.1 kHz WAV (afconvert -f WAVE -d LEI16@44100 -c 1 in.ogg out.wav):
-  Clock_(tic_tac).wav               https://commons.wikimedia.org/wiki/File:Clock_(tic_tac).ogg
-  Gong_or_bell_vibrant_(short).wav  https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg
+  Clock_(tic_tac).wav                  https://commons.wikimedia.org/wiki/File:Clock_(tic_tac).ogg
+  Gong_or_bell_vibrant_(short).wav     https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg
+  Ocean_Waves_on_a_Tropical_Beach.wav  https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg
 
 Output goes to Resources/Sounds:
   tick_00.wav ... tick_NN.wav  one file per tick, in recording order
                                (even = "tick", odd = "tock" at playback)
   gong.wav                     trimmed and normalized gong
+  waves.m4a                    seamless surf loop for breaks
 """
 import array
 import math
+import subprocess
 import sys
 import wave
 from pathlib import Path
@@ -49,10 +52,30 @@ def fade_out(x, seconds):
     return x
 
 
+def highpass(x, freq, q=0.7071):
+    """RBJ biquad high-pass."""
+    w0 = 2 * math.pi * freq / SR
+    alpha = math.sin(w0) / (2 * q)
+    c = math.cos(w0)
+    a0 = 1 + alpha
+    b0, b1, b2 = (1 + c) / 2 / a0, -(1 + c) / a0, (1 + c) / 2 / a0
+    a1, a2 = -2 * c / a0, (1 - alpha) / a0
+    y, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
+    for v in x:
+        o = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2, x1, y2, y1 = x1, v, y1, o
+        y.append(o)
+    return y
+
+
 def slice_ticks(x):
+    # The recording has rumble and mains hum well below the tick's own spectrum;
+    # a 4th-order high-pass at 500 Hz removes it without changing the tick.
+    x = highpass(highpass(x, 500), 500)
     win = int(SR * 0.005)
     env = envelope(x, win)
     peak = max(env)
+    floor = sorted(env)[len(env) // 2]
     onsets, last = [], -1e9
     for i, e in enumerate(env):
         if e > peak * 0.25 and i * win - last > SR * 0.25:
@@ -61,14 +84,15 @@ def slice_ticks(x):
     ticks = []
     for k, start in enumerate(onsets):
         start = max(0, start - int(SR * 0.004))
-        end = min(start + int(SR * 0.45), onsets[k + 1] - int(SR * 0.01) if k + 1 < len(onsets) else len(x))
+        end = min(start + int(SR * 0.3), onsets[k + 1] - int(SR * 0.01) if k + 1 < len(onsets) else len(x))
         seg = x[start:end]
-        # Cut the tail once the tick has decayed below 3 % of its peak.
+        # Cut the tail where the tick sinks into the background noise (floor + 6 dB),
+        # so no noise is carried from one tick into the silence before the next.
         e = envelope(seg, win)
-        p = max(e)
-        tail = next((i for i in range(len(e) - 1, 0, -1) if e[i] > p * 0.03), len(e) - 1)
-        seg = seg[: min(len(seg), (tail + 2) * win)]
-        ticks.append(fade_out(seg, 0.04))
+        peak_at = e.index(max(e))
+        tail = next((i for i in range(peak_at, len(e)) if e[i] < floor * 2), len(e))
+        seg = seg[: min(len(seg), (tail + 1) * win)]
+        ticks.append(fade_out(seg, 0.02))
     # One gain for the whole set keeps the natural loudness differences between ticks.
     g = 0.89 / max(abs(v) for t in ticks for v in t)
     return [[v * g for v in t] for t in ticks]
@@ -82,6 +106,21 @@ def prepare_gong(x):
     return fade_out([v * g for v in seg], 1.0)
 
 
+def prepare_waves(x):
+    """90 s of surf, looped seamlessly with a 4 s crossfade, at a calm level."""
+    seg = x[120 * SR:210 * SR + 4 * SR]
+    xf = 4 * SR
+    body = seg[:-xf]
+    tail = seg[-xf:]
+    # Equal-power crossfade of the tail into the start, so the end flows into the beginning.
+    for i in range(xf):
+        t = i / xf
+        body[i] = body[i] * math.sin(t * math.pi / 2) + tail[i] * math.cos(t * math.pi / 2)
+    rms = math.sqrt(sum(v * v for v in body[::8]) / (len(body) / 8))
+    g = 0.06 / rms  # about -24 dBFS RMS; the app volume goes on top
+    return [v * g for v in body]
+
+
 def main(raw):
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("tick_*.wav"):
@@ -91,6 +130,11 @@ def main(raw):
         write(OUT / f"tick_{i:02d}.wav", t)
     write(OUT / "gong.wav", prepare_gong(read(raw / "Gong_or_bell_vibrant_(short).wav")))
     print(f"{len(ticks)} ticks, lengths {[round(len(t) / SR, 2) for t in ticks]}")
+    if (raw / "Ocean_Waves_on_a_Tropical_Beach.wav").exists():
+        tmp = raw / "waves_loop.wav"
+        write(tmp, prepare_waves(read(raw / "Ocean_Waves_on_a_Tropical_Beach.wav")))
+        subprocess.run(["afconvert", "-f", "m4af", "-d", "aac", "-b", "64000", str(tmp), str(OUT / "waves.m4a")], check=True)
+        print("waves.m4a written")
 
 
 if __name__ == "__main__":

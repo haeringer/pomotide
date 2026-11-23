@@ -57,6 +57,8 @@ final class Settings {
     var tickVolume: Double { didSet { defaults.set(tickVolume, forKey: "tickVolume") } }
     var gongEnabled: Bool { didSet { defaults.set(gongEnabled, forKey: "gongEnabled") } }
     var gongVolume: Double { didSet { defaults.set(gongVolume, forKey: "gongVolume") } }
+    var breakSound: BreakSound { didSet { defaults.set(breakSound.rawValue, forKey: "breakSound") } }
+    var breakSoundVolume: Double { didSet { defaults.set(breakSoundVolume, forKey: "breakSoundVolume") } }
 
     var silenceDuringBreak: Bool { didSet { defaults.set(silenceDuringBreak, forKey: "silenceDuringBreak") } }
     var silenceDuringFocus: Bool { didSet { defaults.set(silenceDuringFocus, forKey: "silenceDuringFocus") } }
@@ -74,6 +76,8 @@ final class Settings {
             "tickVolume": 0.5,
             "gongEnabled": true,
             "gongVolume": 0.7,
+            "breakSound": BreakSound.off.rawValue,
+            "breakSoundVolume": 0.5,
             "silenceDuringBreak": true,
             "silenceDuringFocus": false,
             "showTimeInMenuBar": true,
@@ -87,6 +91,8 @@ final class Settings {
         tickVolume = defaults.double(forKey: "tickVolume")
         gongEnabled = defaults.bool(forKey: "gongEnabled")
         gongVolume = defaults.double(forKey: "gongVolume")
+        breakSound = BreakSound(rawValue: defaults.string(forKey: "breakSound") ?? "") ?? .off
+        breakSoundVolume = defaults.double(forKey: "breakSoundVolume")
         silenceDuringBreak = defaults.bool(forKey: "silenceDuringBreak")
         silenceDuringFocus = defaults.bool(forKey: "silenceDuringFocus")
         showTimeInMenuBar = defaults.bool(forKey: "showTimeInMenuBar")

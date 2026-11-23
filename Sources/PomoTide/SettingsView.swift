@@ -43,6 +43,12 @@ struct SettingsView: View {
                     if settings.gongEnabled {
                         Slider(value: $settings.gongVolume, in: 0...1) { Text("Volume") }
                     }
+                    Picker("During break", selection: $settings.breakSound) {
+                        ForEach(BreakSound.allCases) { Text($0.title).tag($0) }
+                    }
+                    if settings.breakSound != .off {
+                        Slider(value: $settings.breakSoundVolume, in: 0...1) { Text("Volume") }
+                    }
                 }
 
                 Section {
@@ -67,27 +73,39 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
-            .frame(height: 460)
+            .frame(height: 520)
         }
         .onChange(of: settings.tickSound) { timer.settingsChanged() }
         .onChange(of: settings.tickVolume) { timer.settingsChanged() }
+        .onChange(of: settings.breakSound) { timer.settingsChanged() }
+        .onChange(of: settings.breakSoundVolume) { timer.settingsChanged() }
         .onChange(of: settings.silenceDuringBreak) { timer.settingsChanged() }
         .onChange(of: settings.silenceDuringFocus) { timer.settingsChanged() }
     }
 }
 
+/// Minutes as a text field plus stepper arrows. Typed values are clamped to the range.
 private struct MinutesStepper: View {
     let title: String
     @Binding var value: Int
     let range: ClosedRange<Int>
 
     var body: some View {
-        Stepper(value: $value, in: range) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("\(value) min").monospacedDigit().foregroundStyle(.secondary)
+        LabeledContent(title) {
+            HStack(spacing: 4) {
+                TextField(title, value: clamped, format: .number)
+                    .labelsHidden()
+                    .multilineTextAlignment(.trailing)
+                    .monospacedDigit()
+                    .frame(width: 44)
+                Text("min").foregroundStyle(.secondary)
+                Stepper(title, value: $value, in: range)
+                    .labelsHidden()
             }
         }
+    }
+
+    private var clamped: Binding<Int> {
+        Binding(get: { value }, set: { value = min(max($0, range.lowerBound), range.upperBound) })
     }
 }

@@ -26,6 +26,7 @@ final class PomodoroTimer {
     let settings: Settings
     let focus = FocusController()
     private let ticker = TickPlayer()
+    private let breakSound = BreakSoundPlayer()
     private let gong = GongPlayer()
 
     private(set) var phase: Phase = .idle
@@ -83,6 +84,7 @@ final class PomodoroTimer {
         pausedRemaining = remaining
         isPaused = true
         ticker.stop()
+        breakSound.stop()
         stopClock()
     }
 
@@ -105,12 +107,14 @@ final class PomodoroTimer {
         completedFocus = 0
         stopClock()
         ticker.stop()
+        breakSound.stop()
         focus.set(false)
     }
 
     /// Called when settings change, so a running phase picks up sound and Focus changes.
     func settingsChanged() {
         ticker.volume = settings.tickVolume
+        breakSound.volume = settings.breakSoundVolume
         guard isRunning else { return }
         applyEffects(phaseChanged: false)
     }
@@ -157,10 +161,16 @@ final class PomodoroTimer {
 
     private func applyEffects(phaseChanged: Bool) {
         ticker.volume = settings.tickVolume
+        breakSound.volume = settings.breakSoundVolume
         if phase == .focus, !isPaused {
             ticker.start(settings.tickSound)
         } else {
             ticker.stop()
+        }
+        if phase.isBreak, !isPaused {
+            breakSound.start(settings.breakSound)
+        } else {
+            breakSound.stop()
         }
         let silence = (phase == .focus && settings.silenceDuringFocus) || (phase.isBreak && settings.silenceDuringBreak)
         focus.set(silence)
