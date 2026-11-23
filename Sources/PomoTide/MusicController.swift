@@ -23,6 +23,7 @@ final class MusicController {
     private var baseVolume: Int?
     private var lastSetVolume: Int?
     private var fadeInTimer: Timer?
+    private var restoreTimer: Timer?
 
     var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleID).isEmpty
@@ -41,12 +42,35 @@ final class MusicController {
     }
 
     /// Pauses music that PomoTide started; used for breaks and when the timer is paused.
-    /// Restores Music's volume if a fade was in progress.
+    /// If a fade was in progress, Music's volume is restored once playback has really stopped.
     func pause() {
         if owned, isRunning, state == "playing" {
             run("tell application \"Music\" to pause")
+            restoreVolumeWhenSilent()
+        } else {
+            endFade()
         }
-        endFade()
+    }
+
+    /// Music stops a moment after "pause" returns; restoring the volume right away
+    /// would let the last fraction of a second play at full volume.
+    private func restoreVolumeWhenSilent() {
+        fadeInTimer?.invalidate()
+        fadeInTimer = nil
+        guard baseVolume != nil else { return }
+        restoreTimer?.invalidate()
+        let start = Date()
+        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let elapsed = Date().timeIntervalSince(start)
+                // At least 0.5 s for Music's output buffer to drain, at most 3 s.
+                guard elapsed >= 0.5, self.state != "playing" || elapsed >= 3 else { return }
+                self.endFade()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        restoreTimer = timer
     }
 
     /// Pauses PomoTide's music and forgets it, so the next session starts the playlist anew.
@@ -72,6 +96,8 @@ final class MusicController {
     func endFade() {
         fadeInTimer?.invalidate()
         fadeInTimer = nil
+        restoreTimer?.invalidate()
+        restoreTimer = nil
         guard let v = baseVolume else { return }
         baseVolume = nil
         lastSetVolume = nil
