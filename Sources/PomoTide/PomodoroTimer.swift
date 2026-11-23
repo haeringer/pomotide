@@ -111,7 +111,8 @@ final class PomodoroTimer {
 
     func pause() {
         guard isRunning else { return }
-        pausedRemaining = remaining
+        // Measure against the current time, not `now`, which may be up to a second old.
+        pausedRemaining = max(0, phaseEnd.timeIntervalSinceNow)
         isPaused = true
         ticker.stop()
         breakSound.stop()
@@ -122,8 +123,11 @@ final class PomodoroTimer {
 
     func resume() {
         guard phase != .idle, isPaused else { return }
+        // `now` stood still during the pause; update it together with the end date,
+        // or the first second after resuming shows the pause added to the remaining time.
+        now = Date()
+        phaseEnd = now.addingTimeInterval(pausedRemaining)
         isPaused = false
-        phaseEnd = Date().addingTimeInterval(pausedRemaining)
         startClock()
         applyEffects()
     }
