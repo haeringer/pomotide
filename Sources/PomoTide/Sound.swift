@@ -159,15 +159,22 @@ final class TickPlayer {
 }
 
 /// Plays the gong or singing bowl at the start and end of a break.
+/// Both are loaded and prepared up front, so they start without delay.
 @MainActor
 final class TransitionPlayer {
     private var players: [TransitionSound: AVAudioPlayer] = [:]
 
-    func play(_ sound: TransitionSound, volume: Double) {
-        guard let file = sound.file else { return }
-        if players[sound] == nil, let url = Bundle.main.url(forResource: file.name, withExtension: file.ext, subdirectory: "Sounds") {
-            players[sound] = try? AVAudioPlayer(contentsOf: url)
+    init() {
+        for sound in TransitionSound.allCases {
+            guard let url = Bundle.main.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Sounds"),
+                  let player = try? AVAudioPlayer(contentsOf: url)
+            else { continue }
+            player.prepareToPlay()
+            players[sound] = player
         }
+    }
+
+    func play(_ sound: TransitionSound, volume: Double) {
         guard let player = players[sound] else { return }
         player.volume = Float(volume) * sound.gain
         player.currentTime = 0

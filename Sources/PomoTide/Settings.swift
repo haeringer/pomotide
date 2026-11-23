@@ -29,25 +29,19 @@ enum TickSound: String, CaseIterable, Identifiable {
 }
 
 enum TransitionSound: String, CaseIterable, Identifiable {
-    case none, gong, bowl
+    case gong, bowl
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .none: "None"
         case .gong: "Gong"
         case .bowl: "Singing Bowl"
         }
     }
 
-    var file: (name: String, ext: String)? {
-        switch self {
-        case .none: nil
-        case .gong: ("gong", "wav")
-        case .bowl: ("bowl", "wav")
-        }
-    }
+    /// File name in Resources/Sounds, without the .wav extension.
+    var fileName: String { rawValue }
 
     var gain: Float { 1.0 }
 }

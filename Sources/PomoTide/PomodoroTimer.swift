@@ -148,7 +148,7 @@ final class PomodoroTimer {
         startClock()
         // Transition sound at the start and the end of every break, not when the first focus starts.
         var tickFadeIn: TimeInterval = 0
-        if previous != .idle, previous.isBreak != next.isBreak, settings.transitionSound != .none {
+        if previous != .idle, previous.isBreak != next.isBreak {
             transition.play(settings.transitionSound, volume: settings.transitionVolume)
             // Let the ticking swell in while the gong or bowl rings out (both last about 6 s).
             if next == .focus { tickFadeIn = 6 }
