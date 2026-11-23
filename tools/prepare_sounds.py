@@ -3,9 +3,10 @@
 
 Usage: tools/prepare_sounds.py <raw-dir>
 
-<raw-dir> must contain the source files from Wikimedia Commons, converted
-to 16-bit mono 44.1 kHz WAV (afconvert -f WAVE -d LEI16@44100 -c 1 in.ogg out.wav):
-  Clock_(tic_tac).wav                  https://commons.wikimedia.org/wiki/File:Clock_(tic_tac).ogg
+<raw-dir> must contain these CC0 source files, converted to 16-bit mono 44.1 kHz
+WAV (afconvert -f WAVE -d LEI16@44100 -c 1 in.ogg out.wav):
+  1min_Clock_Ticking.wav               https://freesound.org/s/813355/ by bulkmoerls
+                                       (HQ preview, cdn.freesound.org/previews/813/813355_17511816-hq.mp3)
   Gong_or_bell_vibrant_(short).wav     https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg
   Ocean_Waves_on_a_Tropical_Beach.wav  https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg
 
@@ -68,6 +69,31 @@ def highpass(x, freq, q=0.7071):
     return y
 
 
+def lowpass(x, freq, q=0.7071):
+    """RBJ biquad low-pass."""
+    w0 = 2 * math.pi * freq / SR
+    alpha = math.sin(w0) / (2 * q)
+    c = math.cos(w0)
+    a0 = 1 + alpha
+    b0, b1, b2 = (1 - c) / 2 / a0, (1 - c) / a0, (1 - c) / 2 / a0
+    a1, a2 = -2 * c / a0, (1 - alpha) / a0
+    y, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
+    for v in x:
+        o = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+        x2, x1, y2, y1 = x1, v, y1, o
+        y.append(o)
+    return y
+
+
+def soften(tick):
+    """Takes the edge off: 4th-order low-pass at 4 kHz and a 2 ms fade-in."""
+    tick = lowpass(lowpass(tick, 4000), 4000)
+    n = int(SR * 0.002)
+    for i in range(min(n, len(tick))):
+        tick[i] *= i / n
+    return tick
+
+
 def slice_ticks(x):
     # The recording has rumble and mains hum well below the tick's own spectrum;
     # a 4th-order high-pass at 500 Hz removes it without changing the tick.
@@ -125,7 +151,10 @@ def main(raw):
     OUT.mkdir(parents=True, exist_ok=True)
     for old in OUT.glob("tick_*.wav"):
         old.unlink()
-    ticks = slice_ticks(read(raw / "Clock_(tic_tac).wav"))
+    # 24 ticks give enough variety; an even count keeps tick/tock pairs intact.
+    ticks = [soften(t) for t in slice_ticks(read(raw / "1min_Clock_Ticking.wav"))[:24]]
+    g = 0.89 / max(abs(v) for t in ticks for v in t)
+    ticks = [[v * g for v in t] for t in ticks]
     for i, t in enumerate(ticks):
         write(OUT / f"tick_{i:02d}.wav", t)
     write(OUT / "gong.wav", prepare_gong(read(raw / "Gong_or_bell_vibrant_(short).wav")))
