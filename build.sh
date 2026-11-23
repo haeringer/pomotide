@@ -3,13 +3,16 @@
 set -euo pipefail
 cd "${0:A:h}"
 
-VERSION="0.1.0"
+VERSION="${VERSION:-0.1.0}"
 APP="build/PomoTide.app"
 
 # The macOS 27 SDK in the Command Line Tools ships SwiftUI macros without their
-# compiler plugin, so build against the macOS 26 SDK when it is there.
+# compiler plugin, so build against the macOS 26 SDK when only the Command Line
+# Tools are in use. With Xcode (as on CI) the default SDK is fine.
 SDK26=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk
-[[ -d $SDK26 && -z ${SDKROOT:-} ]] && export SDKROOT=$SDK26
+if [[ $(xcode-select -p) == /Library/Developer/CommandLineTools && -d $SDK26 && -z ${SDKROOT:-} ]]; then
+    export SDKROOT=$SDK26
+fi
 
 FLAGS=(-c release --arch arm64 --arch x86_64 ${=SWIFT_BUILD_FLAGS:-})
 swift build $FLAGS
@@ -28,7 +31,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <dict>
     <key>CFBundleName</key><string>PomoTide</string>
     <key>CFBundleDisplayName</key><string>PomoTide</string>
-    <key>CFBundleIdentifier</key><string>io.pomotide.PomoTide</string>
+    <key>CFBundleIdentifier</key><string>io.github.haeringer.pomotide</string>
     <key>CFBundleExecutable</key><string>PomoTide</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$VERSION</string>

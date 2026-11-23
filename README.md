@@ -20,16 +20,28 @@ macOS 26 or later.
 
 ## Install
 
-There are no prebuilt releases yet, so build it from source. You need the Xcode Command Line Tools (`xcode-select --install`) with Swift 6.2 or later.
+With [Homebrew](https://brew.sh):
 
 ```sh
-git clone <repository-url> pomotide
+brew install --cask haeringer/pomotide/pomotide
+```
+
+PomoTide is not notarized by Apple (that needs a paid developer account). The Homebrew cask therefore removes the download quarantine, so macOS opens it without a warning. If you download the zip from [Releases](https://github.com/haeringer/pomotide/releases) instead, macOS blocks the first start; allow it under System Settings > Privacy & Security > **Open Anyway**.
+
+### Build from source
+
+You need the Xcode Command Line Tools (`xcode-select --install`) with Swift 6.2 or later.
+
+```sh
+git clone https://github.com/haeringer/pomotide.git
 cd pomotide
 ./build.sh --install
 open ~/Applications/PomoTide.app
 ```
 
-`./build.sh` alone builds `build/PomoTide.app` without installing it. To start PomoTide at login, turn on **Start at login** in its settings.
+`./build.sh` alone builds `build/PomoTide.app` without installing it.
+
+To start PomoTide at login, turn on **Start at login** in its settings.
 
 ## Do Not Disturb setup
 
@@ -51,6 +63,8 @@ Settings shows "Shortcuts installed" once both are there. Without them the timer
 | `tools/make_shortcuts.py` | Generates and signs the shortcuts (needs a Mac signed in to iCloud) |
 
 The generated sounds and shortcuts are committed, so a normal build needs neither tool.
+
+To release, push a tag like `v0.1.0`. The release workflow builds a universal app, publishes `PomoTide-0.1.0.zip` with its SHA-256, and the cask in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide) then needs the new version and checksum.
 
 ## Sound credits
 
