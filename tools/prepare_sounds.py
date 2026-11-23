@@ -4,16 +4,18 @@
 Usage: tools/prepare_sounds.py <raw-dir>
 
 <raw-dir> must contain:
-  wall-clock.wav                       wall clock, any PCM16/24 or float WAV
+  wall-clock.wav                       https://freesound.org/s/353174/ by Kinoton (CC0), mixed to mono
   small-quartz-clock.wav               https://freesound.org/s/369870/ by SpliceSound (CC0), denoised
+Both may be any PCM16/24 or float WAV.
   Gong_or_bell_vibrant_(short).wav     https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg (CC0)
   Ocean_Waves_on_a_Tropical_Beach.wav  https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg (CC0)
 The last two as 16-bit mono 44.1 kHz WAV (afconvert -f WAVE -d LEI16@44100 -c 1 in.ogg out.wav).
 
 Output goes to Resources/Sounds:
-  wall_00.wav ...    single ticks, 32-bit float at the source sample rate, unfiltered
+  wall_00.wav ...    single ticks, 16-bit at the source sample rate, unfiltered
   quartz_00.wav ...  (even = "tick", odd = "tock" at playback)
   gong.wav           trimmed and normalized gong
+bowl.wav is copied by hand: https://freesound.org/s/271370/ by inoshirodesign (CC0), with a fade-out.
   waves.m4a          seamless surf loop for breaks
 """
 import array
@@ -28,7 +30,7 @@ SR = 44100
 OUT = Path(__file__).resolve().parent.parent / "Resources" / "Sounds"
 
 
-# MARK: Lossless WAV I/O for the ticks
+# MARK: WAV I/O for the ticks
 
 def read_any(path):
     """Reads a mono or multichannel PCM/float WAV; returns (samples of channel 1, sample rate)."""
@@ -58,14 +60,14 @@ def read_any(path):
     return list(values[::channels]), rate
 
 
-def write_float(path, samples, rate):
-    """Writes a mono 32-bit float WAV."""
-    payload = array.array("f", samples).tobytes()
-    fmt = struct.pack("<HHIIHHH", 3, 1, rate, rate * 4, 4, 32, 0)
-    fact = struct.pack("<I", len(samples))
-    chunks = b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"fact" + struct.pack("<I", 4) + fact
-    chunks += b"data" + struct.pack("<I", len(payload)) + payload
-    Path(path).write_bytes(b"RIFF" + struct.pack("<I", 4 + len(chunks)) + b"WAVE" + chunks)
+def write16(path, samples, rate):
+    """Writes a mono 16-bit WAV at the given sample rate."""
+    data = array.array("h", (max(-32767, min(32767, round(s * 32767))) for s in samples))
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(data.tobytes())
 
 
 # MARK: 16-bit I/O for gong and waves
@@ -160,7 +162,7 @@ def main(raw):
         x, rate = read_any(raw / name)
         ticks = slice_ticks(x, rate, 24)
         for i, t in enumerate(ticks):
-            write_float(OUT / f"{prefix}_{i:02d}.wav", t, rate)
+            write16(OUT / f"{prefix}_{i:02d}.wav", t, rate)
         print(f"{prefix}: {len(ticks)} ticks at {rate} Hz, {[round(len(t) / rate, 2) for t in ticks]}")
     write(OUT / "gong.wav", prepare_gong(read(raw / "Gong_or_bell_vibrant_(short).wav")))
     if (raw / "Ocean_Waves_on_a_Tropical_Beach.wav").exists():

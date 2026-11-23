@@ -43,17 +43,11 @@ enum TransitionSound: String, CaseIterable, Identifiable {
         switch self {
         case .none: nil
         case .gong: ("gong", "wav")
-        case .bowl: ("bowl", "mp3")
+        case .bowl: ("bowl", "wav")
         }
     }
 
-    /// Evens out loudness: the bowl recording is about 6 dB quieter than the gong.
-    var gain: Float {
-        switch self {
-        case .gong: 0.5
-        default: 1.0
-        }
-    }
+    var gain: Float { 1.0 }
 }
 
 /// User settings, persisted in UserDefaults.
