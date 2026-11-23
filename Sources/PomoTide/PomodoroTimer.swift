@@ -43,6 +43,7 @@ final class PomodoroTimer {
     private var fadeOutTimer: Timer?
     /// Ticking or music fades out over the last seconds of a focus phase, before the gong.
     private static let fadeOutDuration: TimeInterval = 5
+    private var terminationSignal: DispatchSourceSignal?
 
     init(settings: Settings) {
         self.settings = settings
@@ -52,6 +53,15 @@ final class PomodoroTimer {
                 self?.focus.turnOffBlocking()
             }
         }
+        // `kill`, `pkill` and logout send SIGTERM, which would end the app without the
+        // cleanup above. Turn it into a normal quit instead.
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler {
+            MainActor.assumeIsolated { NSApp.terminate(nil) }
+        }
+        source.resume()
+        terminationSignal = source
         Task { await focus.refresh() }
     }
 

@@ -20,10 +20,24 @@ final class MusicController {
     /// True while the current playback was started (or resumed) by PomoTide.
     private var owned = false
     /// Music's own volume before a fade began; restored when the fade ends.
-    private var baseVolume: Int?
+    /// Also kept in UserDefaults, so a fade cut short by quitting is undone on the next launch.
+    private var baseVolume: Int? {
+        didSet {
+            if let baseVolume {
+                UserDefaults.standard.set(baseVolume, forKey: Self.pendingVolumeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.pendingVolumeKey)
+            }
+        }
+    }
+    private static let pendingVolumeKey = "musicVolumeToRestore"
     private var lastSetVolume: Int?
     private var fadeInTimer: Timer?
     private var restoreTimer: Timer?
+
+    init() {
+        restoreInterruptedFade()
+    }
 
     var isRunning: Bool {
         !NSRunningApplication.runningApplications(withBundleIdentifier: Self.bundleID).isEmpty
@@ -39,6 +53,15 @@ final class MusicController {
         } else if openIfNeeded {
             launch { [weak self] in self?.playNow(playlist: playlist, shuffle: shuffle, fadeIn: fadeIn) }
         }
+    }
+
+    /// Puts back Music's volume if PomoTide quit in the middle of a fade.
+    private func restoreInterruptedFade() {
+        guard baseVolume == nil, isRunning,
+              UserDefaults.standard.object(forKey: Self.pendingVolumeKey) != nil else { return }
+        let v = UserDefaults.standard.integer(forKey: Self.pendingVolumeKey)
+        run("tell application \"Music\" to set sound volume to \(v)")
+        if problem == nil { UserDefaults.standard.removeObject(forKey: Self.pendingVolumeKey) }
     }
 
     /// Pauses music that PomoTide started; used for breaks and when the timer is paused.
@@ -132,6 +155,7 @@ final class MusicController {
     }
 
     private func playNow(playlist: String, shuffle: Bool, fadeIn: TimeInterval) {
+        restoreInterruptedFade()
         let current = state
         if current == "playing" {
             // Either the user's own music (leave it) or ours (already fine).
