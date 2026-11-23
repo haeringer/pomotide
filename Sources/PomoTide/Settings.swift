@@ -2,40 +2,55 @@ import Foundation
 import Observation
 
 enum TickSound: String, CaseIterable, Identifiable {
-    case wallClock, pocketWatch, grandfatherClock, off
+    case wallClock, quartzClock, off
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .wallClock: "Wall Clock"
-        case .pocketWatch: "Pocket Watch"
-        case .grandfatherClock: "Grandfather Clock"
+        case .quartzClock: "Quartz Clock"
         case .off: "Off"
         }
     }
 
-    /// Playback-rate factor applied to the recorded ticks (> 1 is higher and shorter).
-    var pitch: Float {
+    /// File name prefix in Resources/Sounds.
+    var filePrefix: String {
         switch self {
-        case .wallClock: 1.0
-        case .pocketWatch: 1.7
-        case .grandfatherClock: 0.72
-        case .off: 1.0
+        case .wallClock: "wall"
+        case .quartzClock: "quartz"
+        case .off: ""
         }
     }
 
-    /// Seconds between two ticks.
-    var interval: Double {
+    var gain: Float { 1.0 }
+}
+
+enum TransitionSound: String, CaseIterable, Identifiable {
+    case none, gong, bowl
+
+    var id: String { rawValue }
+
+    var title: String {
         switch self {
-        case .pocketWatch: 0.25
-        default: 1.0
+        case .none: "None"
+        case .gong: "Gong"
+        case .bowl: "Singing Bowl"
         }
     }
 
+    var file: (name: String, ext: String)? {
+        switch self {
+        case .none: nil
+        case .gong: ("gong", "wav")
+        case .bowl: ("bowl", "mp3")
+        }
+    }
+
+    /// Evens out loudness: the bowl recording is about 6 dB quieter than the gong.
     var gain: Float {
         switch self {
-        case .pocketWatch: 0.55
+        case .gong: 0.5
         default: 1.0
         }
     }
@@ -55,8 +70,8 @@ final class Settings {
 
     var tickSound: TickSound { didSet { defaults.set(tickSound.rawValue, forKey: "tickSound") } }
     var tickVolume: Double { didSet { defaults.set(tickVolume, forKey: "tickVolume") } }
-    var gongEnabled: Bool { didSet { defaults.set(gongEnabled, forKey: "gongEnabled") } }
-    var gongVolume: Double { didSet { defaults.set(gongVolume, forKey: "gongVolume") } }
+    var transitionSound: TransitionSound { didSet { defaults.set(transitionSound.rawValue, forKey: "transitionSound") } }
+    var transitionVolume: Double { didSet { defaults.set(transitionVolume, forKey: "transitionVolume") } }
     var breakSound: BreakSound { didSet { defaults.set(breakSound.rawValue, forKey: "breakSound") } }
     var breakSoundVolume: Double { didSet { defaults.set(breakSoundVolume, forKey: "breakSoundVolume") } }
 
@@ -74,8 +89,8 @@ final class Settings {
             "longBreakEvery": 4,
             "tickSound": TickSound.wallClock.rawValue,
             "tickVolume": 0.5,
-            "gongEnabled": true,
-            "gongVolume": 0.7,
+            "transitionSound": TransitionSound.gong.rawValue,
+            "transitionVolume": 0.7,
             "breakSound": BreakSound.off.rawValue,
             "breakSoundVolume": 0.5,
             "silenceDuringBreak": true,
@@ -89,8 +104,8 @@ final class Settings {
         longBreakEvery = defaults.integer(forKey: "longBreakEvery")
         tickSound = TickSound(rawValue: defaults.string(forKey: "tickSound") ?? "") ?? .wallClock
         tickVolume = defaults.double(forKey: "tickVolume")
-        gongEnabled = defaults.bool(forKey: "gongEnabled")
-        gongVolume = defaults.double(forKey: "gongVolume")
+        transitionSound = TransitionSound(rawValue: defaults.string(forKey: "transitionSound") ?? "") ?? .gong
+        transitionVolume = defaults.double(forKey: "transitionVolume")
         breakSound = BreakSound(rawValue: defaults.string(forKey: "breakSound") ?? "") ?? .off
         breakSoundVolume = defaults.double(forKey: "breakSoundVolume")
         silenceDuringBreak = defaults.bool(forKey: "silenceDuringBreak")

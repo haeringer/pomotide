@@ -2,41 +2,42 @@ import AVFoundation
 
 /// Plays an analog-sounding clock tick.
 ///
-/// Each tick is picked at random from recorded single ticks, alternating between
-/// "tick" and "tock" recordings, with slight random pitch, loudness and timing.
+/// Each tick is picked at random from 24 recorded single ticks, alternating
+/// between "tick" and "tock" recordings, with slight random loudness and timing.
+/// The samples are played unmodified at their own sample rate.
 /// The audio engine only runs while ticking.
 @MainActor
 final class TickPlayer {
     private let engine = AVAudioEngine()
     private let node = AVAudioPlayerNode()
-    private let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
-    private var raw: [[Float]] = []
-    private var variants: [[AVAudioPCMBuffer]] = [[], []]  // [tick, tock]
-    private var variantsFor: TickSound?
+    private var ticks: [[AVAudioPCMBuffer]] = [[], []]  // [tick, tock]
+    private var loaded: TickSound?
     private var sound: TickSound = .off
     private var scheduler: Timer?
     private var nextSample: AVAudioFramePosition = 0
+    private var sampleRate: Double = 44_100
     private var beat = 0
 
     init() {
         engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
-        raw = Self.loadTicks()
     }
 
     var volume: Double = 0.5 {
-        didSet { node.volume = Float(volume) }
+        didSet { applyVolume() }
     }
 
     var isPlaying: Bool { scheduler != nil }
 
     func start(_ sound: TickSound) {
-        guard sound != .off, !raw.isEmpty else { return stop() }
+        guard sound != .off else { return stop() }
         if isPlaying, sound == self.sound { return }
         stop()
+        load(sound)
+        guard let format = ticks[0].first?.format else { return }
         self.sound = sound
-        buildVariants(for: sound)
-        node.volume = Float(volume)
+        sampleRate = format.sampleRate
+        engine.connect(node, to: engine.mainMixerNode, format: format)
+        applyVolume()
         do {
             try engine.start()
         } catch {
@@ -44,7 +45,7 @@ final class TickPlayer {
             return
         }
         node.play()
-        nextSample = currentSample + AVAudioFramePosition(format.sampleRate * 0.15)
+        nextSample = currentSample + AVAudioFramePosition(sampleRate * 0.15)
         beat = 0
         scheduleAhead()
         let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -61,6 +62,10 @@ final class TickPlayer {
         engine.stop()
     }
 
+    private func applyVolume() {
+        node.volume = Float(volume) * sound.gain
+    }
+
     private var currentSample: AVAudioFramePosition {
         guard let nodeTime = node.lastRenderTime, let t = node.playerTime(forNodeTime: nodeTime) else { return 0 }
         return t.sampleTime
@@ -68,92 +73,69 @@ final class TickPlayer {
 
     /// Keeps about 1.5 seconds of ticks queued on the player node.
     private func scheduleAhead() {
-        let sr = format.sampleRate
-        let horizon = currentSample + AVAudioFramePosition(sr * 1.5)
+        let horizon = currentSample + AVAudioFramePosition(sampleRate * 1.5)
         while nextSample < horizon {
-            let set = variants[beat % 2]
-            if let buffer = set.randomElement() {
-                node.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: nextSample, atRate: sr))
+            if let buffer = ticks[beat % 2].randomElement() {
+                node.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: nextSample, atRate: sampleRate))
             }
             beat += 1
-            // A real escapement is never perfectly even: up to ±1 % of the interval.
-            let jitter = Double.random(in: -0.01...0.01) * sound.interval
-            nextSample += AVAudioFramePosition(sr * (sound.interval + jitter))
+            // A real escapement is never perfectly even: up to ±1 % of the second.
+            nextSample += AVAudioFramePosition(sampleRate * Double.random(in: 0.99...1.01))
         }
     }
 
-    private func buildVariants(for sound: TickSound) {
-        guard variantsFor != sound else { return }
-        let maxLength = Int(format.sampleRate * sound.interval * 0.9)
-        variants = [[], []]
-        for (i, samples) in raw.enumerated() {
-            for _ in 0..<2 {
-                let pitch = sound.pitch * Float.random(in: 0.97...1.03)
-                let gain = sound.gain * Float.random(in: 0.85...1.0)
-                let out = Self.resample(samples, by: pitch, gain: gain, maxLength: maxLength)
-                if let buffer = makeBuffer(out) { variants[i % 2].append(buffer) }
+    /// Loads each tick twice, once at full level and once slightly quieter, for variety.
+    private func load(_ sound: TickSound) {
+        guard loaded != sound else { return }
+        ticks = [[], []]
+        for (i, buffer) in Self.loadBuffers(prefix: sound.filePrefix).enumerated() {
+            ticks[i % 2].append(buffer)
+            if let quieter = Self.scaled(buffer, by: Float.random(in: 0.8...0.9)) {
+                ticks[i % 2].append(quieter)
             }
         }
-        variantsFor = sound
+        loaded = sound
     }
 
-    private func makeBuffer(_ samples: [Float]) -> AVAudioPCMBuffer? {
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(samples.count)) else { return nil }
-        buffer.frameLength = AVAudioFrameCount(samples.count)
-        samples.withUnsafeBufferPointer { src in
-            buffer.floatChannelData![0].update(from: src.baseAddress!, count: samples.count)
+    private static func scaled(_ buffer: AVAudioPCMBuffer, by gain: Float) -> AVAudioPCMBuffer? {
+        guard let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength),
+              let src = buffer.floatChannelData, let dst = copy.floatChannelData
+        else { return nil }
+        copy.frameLength = buffer.frameLength
+        for ch in 0..<Int(buffer.format.channelCount) {
+            for i in 0..<Int(buffer.frameLength) { dst[ch][i] = src[ch][i] * gain }
         }
-        return buffer
+        return copy
     }
 
-    /// Linear-interpolation resampling; changes pitch and length together, like a faster or slower recording.
-    private static func resample(_ x: [Float], by rate: Float, gain: Float, maxLength: Int) -> [Float] {
-        let count = min(Int(Float(x.count) / rate), maxLength)
-        var out = [Float](repeating: 0, count: count)
-        for i in 0..<count {
-            let pos = Float(i) * rate
-            let j = Int(pos)
-            let frac = pos - Float(j)
-            let a = x[j]
-            let b = j + 1 < x.count ? x[j + 1] : 0
-            out[i] = (a + (b - a) * frac) * gain
-        }
-        // Short fade-out so a shortened tick never ends with a click.
-        let fade = min(count, 441)
-        for k in 0..<fade {
-            out[count - fade + k] *= Float(fade - k) / Float(fade)
-        }
-        return out
-    }
-
-    private static func loadTicks() -> [[Float]] {
+    private static func loadBuffers(prefix: String) -> [AVAudioPCMBuffer] {
         guard let dir = Bundle.main.resourceURL?.appending(path: "Sounds") else { return [] }
         let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
         return files
-            .filter { $0.lastPathComponent.hasPrefix("tick_") }
+            .filter { $0.lastPathComponent.hasPrefix(prefix + "_") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { url in
                 guard let file = try? AVAudioFile(forReading: url),
                       let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)),
-                      (try? file.read(into: buffer)) != nil,
-                      let data = buffer.floatChannelData
+                      (try? file.read(into: buffer)) != nil
                 else { return nil }
-                return Array(UnsafeBufferPointer(start: data[0], count: Int(buffer.frameLength)))
+                return buffer
             }
     }
 }
 
-/// Plays the gong at phase changes.
+/// Plays the gong or singing bowl at the start and end of a break.
 @MainActor
-final class GongPlayer {
-    private var player: AVAudioPlayer?
+final class TransitionPlayer {
+    private var players: [TransitionSound: AVAudioPlayer] = [:]
 
-    func play(volume: Double) {
-        if player == nil, let url = Bundle.main.url(forResource: "gong", withExtension: "wav", subdirectory: "Sounds") {
-            player = try? AVAudioPlayer(contentsOf: url)
+    func play(_ sound: TransitionSound, volume: Double) {
+        guard let file = sound.file else { return }
+        if players[sound] == nil, let url = Bundle.main.url(forResource: file.name, withExtension: file.ext, subdirectory: "Sounds") {
+            players[sound] = try? AVAudioPlayer(contentsOf: url)
         }
-        guard let player else { return }
-        player.volume = Float(volume)
+        guard let player = players[sound] else { return }
+        player.volume = Float(volume) * sound.gain
         player.currentTime = 0
         player.play()
     }

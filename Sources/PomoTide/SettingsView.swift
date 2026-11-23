@@ -39,9 +39,11 @@ struct SettingsView: View {
                     if settings.tickSound != .off {
                         Slider(value: $settings.tickVolume, in: 0...1) { Text("Volume") }
                     }
-                    Toggle("Gong at start and end of break", isOn: $settings.gongEnabled)
-                    if settings.gongEnabled {
-                        Slider(value: $settings.gongVolume, in: 0...1) { Text("Volume") }
+                    Picker("Start and end of break", selection: $settings.transitionSound) {
+                        ForEach(TransitionSound.allCases) { Text($0.title).tag($0) }
+                    }
+                    if settings.transitionSound != .none {
+                        Slider(value: $settings.transitionVolume, in: 0...1) { Text("Volume") }
                     }
                     Picker("During break", selection: $settings.breakSound) {
                         ForEach(BreakSound.allCases) { Text($0.title).tag($0) }

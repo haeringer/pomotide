@@ -78,7 +78,8 @@ struct TimerView: View {
             HStack {
                 Button("Settings", systemImage: "gearshape", action: openSettings)
                 Spacer()
-                Button("Quit", systemImage: "power") { NSApp.terminate(nil) }
+                Button("Quit PomoTide", systemImage: "xmark.circle") { NSApp.terminate(nil) }
+                    .help("Quit PomoTide")
             }
             .buttonStyle(.borderless)
             .labelStyle(.iconOnly)

@@ -1,23 +1,24 @@
 #!/usr/bin/env python3
-"""Turn raw CC0 recordings into the sound files bundled with PomoTide.
+"""Turn raw recordings into the sound files bundled with PomoTide.
 
 Usage: tools/prepare_sounds.py <raw-dir>
 
-<raw-dir> must contain these CC0 source files, converted to 16-bit mono 44.1 kHz
-WAV (afconvert -f WAVE -d LEI16@44100 -c 1 in.ogg out.wav):
-  1min_Clock_Ticking.wav               https://freesound.org/s/813355/ by bulkmoerls
-                                       (HQ preview, cdn.freesound.org/previews/813/813355_17511816-hq.mp3)
-  Gong_or_bell_vibrant_(short).wav     https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg
-  Ocean_Waves_on_a_Tropical_Beach.wav  https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg
+<raw-dir> must contain:
+  wall-clock.wav                       wall clock, any PCM16/24 or float WAV
+  small-quartz-clock.wav               https://freesound.org/s/369870/ by SpliceSound (CC0), denoised
+  Gong_or_bell_vibrant_(short).wav     https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg (CC0)
+  Ocean_Waves_on_a_Tropical_Beach.wav  https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg (CC0)
+The last two as 16-bit mono 44.1 kHz WAV (afconvert -f WAVE -d LEI16@44100 -c 1 in.ogg out.wav).
 
 Output goes to Resources/Sounds:
-  tick_00.wav ... tick_NN.wav  one file per tick, in recording order
-                               (even = "tick", odd = "tock" at playback)
-  gong.wav                     trimmed and normalized gong
-  waves.m4a                    seamless surf loop for breaks
+  wall_00.wav ...    single ticks, 32-bit float at the source sample rate, unfiltered
+  quartz_00.wav ...  (even = "tick", odd = "tock" at playback)
+  gong.wav           trimmed and normalized gong
+  waves.m4a          seamless surf loop for breaks
 """
 import array
 import math
+import struct
 import subprocess
 import sys
 import wave
@@ -26,6 +27,48 @@ from pathlib import Path
 SR = 44100
 OUT = Path(__file__).resolve().parent.parent / "Resources" / "Sounds"
 
+
+# MARK: Lossless WAV I/O for the ticks
+
+def read_any(path):
+    """Reads a mono or multichannel PCM/float WAV; returns (samples of channel 1, sample rate)."""
+    data = Path(path).read_bytes()
+    assert data[:4] == b"RIFF" and data[8:12] == b"WAVE", path
+    pos, fmt, raw = 12, None, None
+    while pos + 8 <= len(data):
+        cid, size = data[pos:pos + 4], struct.unpack("<I", data[pos + 4:pos + 8])[0]
+        body = data[pos + 8:pos + 8 + size]
+        if cid == b"fmt ":
+            tag, channels, rate, _, _, bits = struct.unpack("<HHIIHH", body[:16])
+            if tag == 0xFFFE:  # WAVE_FORMAT_EXTENSIBLE: real format is in the subformat GUID
+                tag = struct.unpack("<H", body[24:26])[0]
+            fmt = (tag, channels, rate, bits)
+        elif cid == b"data":
+            raw = body
+        pos += 8 + size + (size & 1)
+    tag, channels, rate, bits = fmt
+    if tag == 3 and bits == 32:
+        values = array.array("f", raw[: len(raw) // 4 * 4])
+    elif tag == 1 and bits == 16:
+        values = [v / 32768 for v in array.array("h", raw[: len(raw) // 2 * 2])]
+    elif tag == 1 and bits == 24:
+        values = [int.from_bytes(raw[i:i + 3], "little", signed=True) / 8388608 for i in range(0, len(raw) - 2, 3)]
+    else:
+        raise ValueError(f"{path}: unsupported WAV format {fmt}")
+    return list(values[::channels]), rate
+
+
+def write_float(path, samples, rate):
+    """Writes a mono 32-bit float WAV."""
+    payload = array.array("f", samples).tobytes()
+    fmt = struct.pack("<HHIIHHH", 3, 1, rate, rate * 4, 4, 32, 0)
+    fact = struct.pack("<I", len(samples))
+    chunks = b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"fact" + struct.pack("<I", 4) + fact
+    chunks += b"data" + struct.pack("<I", len(payload)) + payload
+    Path(path).write_bytes(b"RIFF" + struct.pack("<I", 4 + len(chunks)) + b"WAVE" + chunks)
+
+
+# MARK: 16-bit I/O for gong and waves
 
 def read(path):
     with wave.open(str(path)) as w:
@@ -42,83 +85,44 @@ def write(path, samples):
         w.writeframes(data.tobytes())
 
 
+# MARK: Processing
+
 def envelope(x, win):
     return [math.sqrt(sum(v * v for v in x[i:i + win]) / win) for i in range(0, len(x) - win, win)]
 
 
-def fade_out(x, seconds):
-    n = min(len(x), int(SR * seconds))
+def fade_out(x, seconds, rate=SR):
+    n = min(len(x), int(rate * seconds))
     for i in range(n):
         x[len(x) - n + i] *= 0.5 * (1 + math.cos(math.pi * i / n))
     return x
 
 
-def highpass(x, freq, q=0.7071):
-    """RBJ biquad high-pass."""
-    w0 = 2 * math.pi * freq / SR
-    alpha = math.sin(w0) / (2 * q)
-    c = math.cos(w0)
-    a0 = 1 + alpha
-    b0, b1, b2 = (1 + c) / 2 / a0, -(1 + c) / a0, (1 + c) / 2 / a0
-    a1, a2 = -2 * c / a0, (1 - alpha) / a0
-    y, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
-    for v in x:
-        o = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-        x2, x1, y2, y1 = x1, v, y1, o
-        y.append(o)
-    return y
+def slice_ticks(x, rate, count):
+    """Cuts single ticks out of a clean recording, without filtering.
 
-
-def lowpass(x, freq, q=0.7071):
-    """RBJ biquad low-pass."""
-    w0 = 2 * math.pi * freq / SR
-    alpha = math.sin(w0) / (2 * q)
-    c = math.cos(w0)
-    a0 = 1 + alpha
-    b0, b1, b2 = (1 - c) / 2 / a0, (1 - c) / a0, (1 - c) / 2 / a0
-    a1, a2 = -2 * c / a0, (1 - alpha) / a0
-    y, x1, x2, y1, y2 = [], 0.0, 0.0, 0.0, 0.0
-    for v in x:
-        o = b0 * v + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-        x2, x1, y2, y1 = x1, v, y1, o
-        y.append(o)
-    return y
-
-
-def soften(tick):
-    """Takes the edge off: 4th-order low-pass at 4 kHz and a 2 ms fade-in."""
-    tick = lowpass(lowpass(tick, 4000), 4000)
-    n = int(SR * 0.002)
-    for i in range(min(n, len(tick))):
-        tick[i] *= i / n
-    return tick
-
-
-def slice_ticks(x):
-    # The recording has rumble and mains hum well below the tick's own spectrum;
-    # a 4th-order high-pass at 500 Hz removes it without changing the tick.
-    x = highpass(highpass(x, 500), 500)
-    win = int(SR * 0.005)
+    Each tick runs from just before its onset until it has decayed into the
+    background (floor + 6 dB), at most 0.6 s, and ends with a short fade.
+    """
+    win = int(rate * 0.005)
     env = envelope(x, win)
     peak = max(env)
     floor = sorted(env)[len(env) // 2]
     onsets, last = [], -1e9
     for i, e in enumerate(env):
-        if e > peak * 0.25 and i * win - last > SR * 0.25:
+        if e > peak * 0.25 and i * win - last > rate * 0.25:
             onsets.append(i * win)
             last = i * win
     ticks = []
-    for k, start in enumerate(onsets):
-        start = max(0, start - int(SR * 0.004))
-        end = min(start + int(SR * 0.3), onsets[k + 1] - int(SR * 0.01) if k + 1 < len(onsets) else len(x))
+    for k, onset in enumerate(onsets[:count]):
+        start = max(0, onset - int(rate * 0.004))
+        end = min(start + int(rate * 0.6), onsets[k + 1] - int(rate * 0.01) if k + 1 < len(onsets) else len(x))
         seg = x[start:end]
-        # Cut the tail where the tick sinks into the background noise (floor + 6 dB),
-        # so no noise is carried from one tick into the silence before the next.
         e = envelope(seg, win)
         peak_at = e.index(max(e))
         tail = next((i for i in range(peak_at, len(e)) if e[i] < floor * 2), len(e))
-        seg = seg[: min(len(seg), (tail + 1) * win)]
-        ticks.append(fade_out(seg, 0.02))
+        seg = list(seg[: min(len(seg), (tail + 1) * win)])
+        ticks.append(fade_out(seg, 0.02, rate))
     # One gain for the whole set keeps the natural loudness differences between ticks.
     g = 0.89 / max(abs(v) for t in ticks for v in t)
     return [[v * g for v in t] for t in ticks]
@@ -149,16 +153,16 @@ def prepare_waves(x):
 
 def main(raw):
     OUT.mkdir(parents=True, exist_ok=True)
-    for old in OUT.glob("tick_*.wav"):
+    for old in [*OUT.glob("tick_*.wav"), *OUT.glob("wall_*.wav"), *OUT.glob("quartz_*.wav")]:
         old.unlink()
     # 24 ticks give enough variety; an even count keeps tick/tock pairs intact.
-    ticks = [soften(t) for t in slice_ticks(read(raw / "1min_Clock_Ticking.wav"))[:24]]
-    g = 0.89 / max(abs(v) for t in ticks for v in t)
-    ticks = [[v * g for v in t] for t in ticks]
-    for i, t in enumerate(ticks):
-        write(OUT / f"tick_{i:02d}.wav", t)
+    for prefix, name in (("wall", "wall-clock.wav"), ("quartz", "small-quartz-clock.wav")):
+        x, rate = read_any(raw / name)
+        ticks = slice_ticks(x, rate, 24)
+        for i, t in enumerate(ticks):
+            write_float(OUT / f"{prefix}_{i:02d}.wav", t, rate)
+        print(f"{prefix}: {len(ticks)} ticks at {rate} Hz, {[round(len(t) / rate, 2) for t in ticks]}")
     write(OUT / "gong.wav", prepare_gong(read(raw / "Gong_or_bell_vibrant_(short).wav")))
-    print(f"{len(ticks)} ticks, lengths {[round(len(t) / SR, 2) for t in ticks]}")
     if (raw / "Ocean_Waves_on_a_Tropical_Beach.wav").exists():
         tmp = raw / "waves_loop.wav"
         write(tmp, prepare_waves(read(raw / "Ocean_Waves_on_a_Tropical_Beach.wav")))

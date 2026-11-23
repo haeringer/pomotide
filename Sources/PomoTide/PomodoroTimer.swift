@@ -27,7 +27,7 @@ final class PomodoroTimer {
     let focus = FocusController()
     private let ticker = TickPlayer()
     private let breakSound = BreakSoundPlayer()
-    private let gong = GongPlayer()
+    private let transition = TransitionPlayer()
 
     private(set) var phase: Phase = .idle
     private(set) var isPaused = false
@@ -135,9 +135,9 @@ final class PomodoroTimer {
         now = Date()
         phaseEnd = now.addingTimeInterval(phaseDuration)
         startClock()
-        // Gong at the start and the end of every break, not when the first focus starts.
-        if settings.gongEnabled, previous != .idle, previous.isBreak != next.isBreak {
-            gong.play(volume: settings.gongVolume)
+        // Transition sound at the start and the end of every break, not when the first focus starts.
+        if previous != .idle, previous.isBreak != next.isBreak {
+            transition.play(settings.transitionSound, volume: settings.transitionVolume)
         }
         applyEffects(phaseChanged: true)
     }
