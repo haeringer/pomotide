@@ -1,16 +1,18 @@
 # PomoTide
 
-A small Pomodoro timer that lives in the macOS menu bar. Focus and break follow each other automatically, with the soft ticking of an analog clock while you work and real quiet while you rest.
+A small Pomodoro timer that lives in the macOS menu bar. It turns on Do Not Disturb by itself, plays natural ticking from real clock recordings and uses the native Liquid Glass design of macOS 26.
+
+<p align="center"><img src="docs/screenshot.png" width="340" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons"></p>
 
 ## Features
 
 - Adjustable focus and break length, optional long break after a set number of sessions
 - Remaining time in the menu bar, controls in a popover (start, pause, skip, stop)
-- Ticking during focus from real clock recordings (wall clock or quartz clock). Each tick is picked from 24 recorded ticks with slight variations in loudness and timing, so it never sounds like a loop
-- Gong or singing bowl at the start and end of every break; the ticking fades in while it rings out
+- Ticking during focus from real clock recordings (wall clock or quartz clock)
+- Gong or singing bowl at the start and end of every break
 - Optional break sound: ocean waves or white, pink or brown noise
 - Do Not Disturb during breaks (on by default) and optionally during focus
-- Native Swift and SwiftUI, no dependencies. The audio engine only runs while a sound plays
+- Native Swift and SwiftUI, no dependencies, light on resources
 
 ## Requirements
 
@@ -52,15 +54,7 @@ The generated sounds and shortcuts are committed, so a normal build needs neithe
 
 ## Sound credits
 
-All recordings are CC0 (public domain).
-
-| Sound | Source | Changes |
-|---|---|---|
-| Wall clock | [Wall Clock Ticks, Quartz Clock](https://freesound.org/s/353174/) by Kinoton | Mono, cut into single ticks |
-| Quartz clock | [Plastic Quartz clock ticking](https://freesound.org/s/369870/) by SpliceSound | Denoised, cut into single ticks |
-| Gong | [Gong or bell vibrant (short)](https://commons.wikimedia.org/wiki/File:Gong_or_bell_vibrant_(short).ogg) from PDSounds | Trimmed, leveled |
-| Singing bowl | [singing bowl strike sound](https://freesound.org/s/271370/) by inoshirodesign | Fade-out, leveled |
-| Ocean waves | [Ocean Waves on a Tropical Beach](https://commons.wikimedia.org/wiki/File:Ocean_Waves_on_a_Tropical_Beach.ogg) by Jarrod Stanley | 90 s seamless loop, leveled |
+All bundled sounds are CC0 recordings, see [CREDITS.md](CREDITS.md).
 
 ## License
 
