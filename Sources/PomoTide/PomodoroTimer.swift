@@ -26,6 +26,9 @@ final class PomodoroTimer {
     let settings: Settings
     let focus = FocusController()
     let music = MusicController()
+    private let hotKey = HotKey()
+    /// False if another app already uses the shortcut.
+    private(set) var hotKeyAvailable = true
     private let ticker = TickPlayer()
     private let breakSound = BreakSoundPlayer()
     private let transition = TransitionPlayer()
@@ -62,7 +65,17 @@ final class PomodoroTimer {
         }
         source.resume()
         terminationSignal = source
+        updateHotKey()
         Task { await focus.refresh() }
+    }
+
+    private func updateHotKey() {
+        if settings.globalShortcut {
+            hotKeyAvailable = hotKey.register { [weak self] in self?.toggle() }
+        } else {
+            hotKey.unregister()
+            hotKeyAvailable = true
+        }
     }
 
     // MARK: State
@@ -134,6 +147,7 @@ final class PomodoroTimer {
 
     /// Called when settings change, so a running phase picks up sound and Focus changes.
     func settingsChanged() {
+        updateHotKey()
         ticker.volume = settings.tickVolume
         breakSound.volume = settings.breakSoundVolume
         guard isRunning else { return }

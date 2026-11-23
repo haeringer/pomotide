@@ -73,6 +73,7 @@ final class Settings {
     var silenceDuringFocus: Bool { didSet { defaults.set(silenceDuringFocus, forKey: "silenceDuringFocus") } }
 
     var showTimeInMenuBar: Bool { didSet { defaults.set(showTimeInMenuBar, forKey: "showTimeInMenuBar") } }
+    var globalShortcut: Bool { didSet { defaults.set(globalShortcut, forKey: "globalShortcut") } }
 
     init() {
         defaults.register(defaults: [
@@ -93,6 +94,7 @@ final class Settings {
             "silenceDuringBreak": true,
             "silenceDuringFocus": false,
             "showTimeInMenuBar": true,
+            "globalShortcut": true,
         ])
         focusMinutes = defaults.integer(forKey: "focusMinutes")
         breakMinutes = defaults.integer(forKey: "breakMinutes")
@@ -111,5 +113,6 @@ final class Settings {
         silenceDuringBreak = defaults.bool(forKey: "silenceDuringBreak")
         silenceDuringFocus = defaults.bool(forKey: "silenceDuringFocus")
         showTimeInMenuBar = defaults.bool(forKey: "showTimeInMenuBar")
+        globalShortcut = defaults.bool(forKey: "globalShortcut")
     }
 }

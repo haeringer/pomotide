@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
@@ -70,7 +71,13 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section {
+                Section("General") {
+                    StartAtLoginToggle()
+                    Toggle("Start and pause with \(HotKey.displayName)", isOn: $settings.globalShortcut)
+                    if settings.globalShortcut, !timer.hotKeyAvailable {
+                        Label("\(HotKey.displayName) is already used by another app.", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
                     Toggle("Show time in menu bar", isOn: $settings.showTimeInMenuBar)
                 }
             }
@@ -86,6 +93,7 @@ struct SettingsView: View {
         .onChange(of: settings.breakSoundVolume) { timer.settingsChanged() }
         .onChange(of: settings.silenceDuringBreak) { timer.settingsChanged() }
         .onChange(of: settings.silenceDuringFocus) { timer.settingsChanged() }
+        .onChange(of: settings.globalShortcut) { timer.settingsChanged() }
     }
 }
 
@@ -119,6 +127,38 @@ private struct MusicSettings: View {
             .font(.caption)
             .foregroundStyle(.secondary)
             .task { if timer.music.playlists.isEmpty, timer.music.isRunning { timer.music.loadPlaylists() } }
+    }
+}
+
+/// Login item via SMAppService. The system holds the state, so it is read from there
+/// rather than stored in UserDefaults; the user can also change it in System Settings.
+private struct StartAtLoginToggle: View {
+    @State private var enabled = SMAppService.mainApp.status == .enabled
+    @State private var problem: String?
+
+    var body: some View {
+        Toggle("Start at login", isOn: Binding(get: { enabled }, set: set))
+            .onAppear { enabled = SMAppService.mainApp.status == .enabled }
+        if let problem {
+            Label(problem, systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        }
+    }
+
+    private func set(_ on: Bool) {
+        do {
+            if on {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            problem = SMAppService.mainApp.status == .requiresApproval
+                ? "Allow PomoTide under System Settings > General > Login Items & Extensions."
+                : nil
+        } catch {
+            problem = error.localizedDescription
+        }
+        enabled = SMAppService.mainApp.status == .enabled
     }
 }
 

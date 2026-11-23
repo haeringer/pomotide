@@ -7,7 +7,7 @@ A small Pomodoro timer that lives in the macOS menu bar. Features automatically 
 ## Features
 
 - Adjustable focus and break length, optional long break after a set number of sessions
-- Remaining time in the menu bar, controls in a popover (start, pause, skip, stop)
+- Remaining time in the menu bar, controls in a popover (start, pause, skip, stop), start and pause from anywhere with ⇧⌥⌘P
 - Ticking during focus from real clock recordings (wall clock or quartz clock), or Apple Music instead: pick a playlist, music pauses during breaks and continues afterwards
 - Gong or singing bowl at the start and end of every break
 - Optional break sound: ocean waves or white, pink or brown noise
@@ -29,7 +29,7 @@ cd pomotide
 open ~/Applications/PomoTide.app
 ```
 
-`./build.sh` alone builds `build/PomoTide.app` without installing it. To start PomoTide at login, add it under System Settings > General > Login Items & Extensions.
+`./build.sh` alone builds `build/PomoTide.app` without installing it. To start PomoTide at login, turn on **Start at login** in its settings.
 
 ## Do Not Disturb setup
 
