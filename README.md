@@ -10,7 +10,7 @@ A small Pomodoro timer that lives in the macOS menu bar. Features automatically 
 - Remaining time in the menu bar, controls in a popover, start and pause from anywhere with ⇧⌥⌘P
 - Ticking during focus from real clock recordings, or Apple Music or Spotify instead: pick a playlist, music pauses during breaks and continues afterwards
 - Gong or singing bowl at the start and end of every break
-- Optional sound during breaks: ocean waves or white, pink or brown noise
+- Optional sound during breaks: ocean waves, or white, pink or brown noise that swells and ebbs like surf
 - macOS Do Not Disturb mode during breaks or during focus
 - Native Swift and SwiftUI, no dependencies, light on resources
 

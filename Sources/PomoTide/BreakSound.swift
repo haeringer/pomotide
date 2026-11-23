@@ -9,9 +9,9 @@ enum BreakSound: String, CaseIterable, Identifiable {
         switch self {
         case .off: "Silence"
         case .waves: "Ocean Waves"
-        case .whiteNoise: "White Noise"
-        case .pinkNoise: "Pink Noise"
-        case .brownNoise: "Brown Noise"
+        case .whiteNoise: "White Tide"
+        case .pinkNoise: "Pink Tide"
+        case .brownNoise: "Brown Tide"
         }
     }
 }
@@ -115,7 +115,7 @@ final class BreakSoundPlayer {
     /// Must be nonisolated: a closure created inside a @MainActor method inherits that
     /// isolation, and Swift traps when the audio thread then calls it.
     private nonisolated static func makeNoiseNode(_ sound: BreakSound, format: AVAudioFormat) -> AVAudioSourceNode {
-        let generator = NoiseGenerator(sound)
+        let generator = NoiseGenerator(sound, sampleRate: format.sampleRate)
         return AVAudioSourceNode(format: format) { _, _, frameCount, bufferList in
             generator.render(frameCount, into: bufferList)
         }
@@ -131,26 +131,60 @@ final class BreakSoundPlayer {
     }
 }
 
-/// Generates white, pink or brown noise on the audio render thread.
-/// State is only touched from that thread.
+/// Generates white, pink or brown noise on the audio render thread, swelling and
+/// ebbing like surf on a beach. State is only touched from that thread.
 private final class NoiseGenerator: @unchecked Sendable {
     private let kind: BreakSound
+    private let sampleRate: Float
     private var rng = SystemRandomNumberGenerator()
     private var b0: Float = 0, b1: Float = 0, b2: Float = 0, b3: Float = 0, b4: Float = 0, b5: Float = 0, b6: Float = 0
     private var brown: Float = 0
 
-    init(_ kind: BreakSound) { self.kind = kind }
+    // Current wave: position 0...1, its length and peak level.
+    private var wavePos: Float = 0
+    private var waveStep: Float = 0
+    private var wavePeak: Float = 1
+    /// One-pole low-pass; the noise is darker between waves and opens up as a wave breaks.
+    private var lowPass: Float = 0
+    private let lowPassCoeff: Float
+
+    init(_ kind: BreakSound, sampleRate: Double) {
+        self.kind = kind
+        self.sampleRate = Float(sampleRate)
+        lowPassCoeff = 1 - exp(-2 * .pi * 700 / Float(sampleRate))
+        nextWave()
+    }
 
     func render(_ frameCount: AVAudioFrameCount, into bufferList: UnsafeMutablePointer<AudioBufferList>) -> OSStatus {
         let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
         guard let out = buffers.first?.mData?.assumingMemoryBound(to: Float.self) else { return noErr }
         for i in 0..<Int(frameCount) {
-            out[i] = next()
+            let x = noise()
+            let swell = envelope()
+            lowPass += lowPassCoeff * (x - lowPass)
+            let bright = 0.35 + 0.65 * swell
+            out[i] = (lowPass + bright * (x - lowPass)) * (0.5 + 0.5 * swell * wavePeak)
         }
         return noErr
     }
 
-    private func next() -> Float {
+    /// Each wave lasts 8 to 14 s and peaks a little differently, so no two sound alike.
+    private func nextWave() {
+        wavePos = 0
+        waveStep = 1 / (Float.random(in: 8...14, using: &rng) * sampleRate)
+        wavePeak = Float.random(in: 0.75...1, using: &rng)
+    }
+
+    /// 0 between waves, 1 at the crest: a quicker rise as the wave builds, a long ebb as it runs out.
+    private func envelope() -> Float {
+        wavePos += waveStep
+        if wavePos >= 1 { nextWave() }
+        let rise: Float = 0.35
+        func smooth(_ p: Float) -> Float { p * p * (3 - 2 * p) }
+        return wavePos < rise ? smooth(wavePos / rise) : 1 - smooth((wavePos - rise) / (1 - rise))
+    }
+
+    private func noise() -> Float {
         let white = Float.random(in: -1...1, using: &rng)
         switch kind {
         case .pinkNoise:
