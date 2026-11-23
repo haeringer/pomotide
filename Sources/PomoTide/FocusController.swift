@@ -49,12 +49,6 @@ final class FocusController {
         }
     }
 
-    func openFocusSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.Focus-Settings.extension") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
     private nonisolated static func run(_ arguments: [String]) async -> String? {
         await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {

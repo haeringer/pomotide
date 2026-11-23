@@ -7,11 +7,11 @@ A small Pomodoro timer that lives in the macOS menu bar. Features automatically 
 ## Features
 
 - Adjustable focus and break length, optional long break after a set number of sessions
-- Remaining time in the menu bar, controls in a popover (start, pause, skip, stop), start and pause from anywhere with ⇧⌥⌘P
-- Ticking during focus from real clock recordings (wall clock or quartz clock), or Apple Music instead: pick a playlist, music pauses during breaks and continues afterwards
+- Remaining time in the menu bar, controls in a popover, start and pause from anywhere with ⇧⌥⌘P
+- Ticking during focus from real clock recordings, or Apple Music instead: pick a playlist, music pauses during breaks and continues afterwards
 - Gong or singing bowl at the start and end of every break
-- Optional break sound: ocean waves or white, pink or brown noise
-- Do Not Disturb during breaks (on by default) and optionally during focus
+- Optional sound during breaks: ocean waves or white, pink or brown noise
+- macOS Do Not Disturb mode during breaks or during focus
 - Native Swift and SwiftUI, no dependencies, light on resources
 
 ## Requirements
@@ -59,11 +59,10 @@ Settings shows "Shortcuts installed" once both are there. Without them the timer
 | `Sources/PomoTide/` | App code |
 | `Resources/Sounds/` | Bundled sounds |
 | `Resources/Shortcuts/` | Signed Focus shortcuts |
-| `tools/prepare_sounds.py` | Cuts and levels the sounds from the source recordings |
 | `tools/make_shortcuts.py` | Generates and signs the shortcuts (needs a Mac signed in to iCloud) |
 | `tools/make_icon.swift` | Draws the app icon into `Resources/AppIcon.icns` |
 
-The generated sounds, shortcuts and icon are committed, so a normal build needs none of the tools.
+The shortcuts and icon are committed, so a normal build needs neither tool.
 
 To release, push a tag like `v0.1.0`. The release workflow builds a universal app, publishes `PomoTide-0.1.0.zip` with its SHA-256, and the cask in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide) then needs the new version and checksum.
 

@@ -24,8 +24,6 @@ enum TickSound: String, CaseIterable, Identifiable {
         case .appleMusic, .off: ""
         }
     }
-
-    var gain: Float { 1.0 }
 }
 
 enum TransitionSound: String, CaseIterable, Identifiable {
@@ -42,8 +40,6 @@ enum TransitionSound: String, CaseIterable, Identifiable {
 
     /// File name in Resources/Sounds, without the .wav extension.
     var fileName: String { rawValue }
-
-    var gain: Float { 1.0 }
 }
 
 /// User settings, persisted in UserDefaults.

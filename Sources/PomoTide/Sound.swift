@@ -97,7 +97,7 @@ final class TickPlayer {
     }
 
     private func applyVolume() {
-        node.volume = Float(volume) * sound.gain * fadeLevel * level
+        node.volume = Float(volume) * fadeLevel * level
     }
 
     private var currentSample: AVAudioFramePosition {
@@ -176,7 +176,7 @@ final class TransitionPlayer {
 
     func play(_ sound: TransitionSound, volume: Double) {
         guard let player = players[sound] else { return }
-        player.volume = Float(volume) * sound.gain
+        player.volume = Float(volume)
         player.currentTime = 0
         player.play()
     }
