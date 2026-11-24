@@ -3,14 +3,15 @@ import Observation
 
 /// What plays during focus: recorded ticking, a music app or nothing.
 enum TickSound: String, CaseIterable, Identifiable {
-    case wallClock, quartzClock, appleMusic, spotify, off
+    case wallClock, quartzClock, fastTicking, appleMusic, spotify, off
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .wallClock: "Wall Clock"
-        case .quartzClock: "Quartz Clock"
+        case .quartzClock: "Tick Tock"
+        case .fastTicking: "Ticking fast"
         case .appleMusic: "Apple Music"
         case .spotify: "Spotify"
         case .off: "Off"
@@ -22,8 +23,14 @@ enum TickSound: String, CaseIterable, Identifiable {
         switch self {
         case .wallClock: "wall"
         case .quartzClock: "quartz"
+        case .fastTicking: "fast"
         case .appleMusic, .spotify, .off: ""
         }
+    }
+
+    /// Seconds between two ticks, as in the recording.
+    var interval: TimeInterval {
+        self == .fastTicking ? 0.264 : 1
     }
 
     var musicApp: MusicApp? {

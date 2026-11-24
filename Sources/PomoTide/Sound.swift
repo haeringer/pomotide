@@ -117,8 +117,8 @@ final class TickPlayer {
                 node.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: nextSample, atRate: sampleRate))
             }
             beat += 1
-            // A real escapement is never perfectly even: up to ±1 % of the second.
-            nextSample += AVAudioFramePosition(sampleRate * Double.random(in: 0.99...1.01))
+            // A real escapement is never perfectly even: up to ±1 % of the interval.
+            nextSample += AVAudioFramePosition(sampleRate * sound.interval * Double.random(in: 0.99...1.01))
         }
     }
 
