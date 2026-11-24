@@ -3,7 +3,8 @@
 set -euo pipefail
 cd "${0:A:h}"
 
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
+VERSION="${VERSION:-0.0.0}"
 APP="build/PomoTide.app"
 
 # The macOS 27 SDK in the Command Line Tools ships SwiftUI macros without their
@@ -41,7 +42,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>LSUIElement</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>NSAppleEventsUsageDescription</key><string>PomoTide starts Apple Music or Spotify during focus sessions and pauses it during breaks.</string>
-    <key>NSHumanReadableCopyright</key><string>MIT License</string>
+    <key>NSHumanReadableCopyright</key><string>© 2026 Benjamin Haeringer, MIT License</string>
 </dict>
 </plist>
 EOF

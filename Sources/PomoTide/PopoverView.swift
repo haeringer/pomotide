@@ -33,7 +33,7 @@ struct TimerView: View {
                 }
                 Menu {
                     Button("Settings…", action: openSettings)
-                    Divider()
+                    Button("About PomoTide", action: Self.showAbout)
                     Button("Quit PomoTide") { NSApp.terminate(nil) }
                 } label: {
                     Image(systemName: "gearshape")
@@ -96,6 +96,21 @@ struct TimerView: View {
 
     private var needsFocusSetup: Bool {
         (settings.silenceDuringBreak || settings.silenceDuringFocus) && !timer.focus.shortcutsInstalled
+    }
+
+    /// The standard About panel; name, version, icon and copyright come from Info.plist.
+    private static func showAbout() {
+        let link = "https://github.com/haeringer/pomotide"
+        let credits = NSMutableAttributedString(
+            string: "github.com/haeringer/pomotide",
+            attributes: [.link: URL(string: link)!, .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)])
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        credits.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: credits.length))
+        // A menu bar app is not active, so the panel would otherwise open behind other windows.
+        NSApp.activate()
+        // An empty build version hides the "(0.2.0)" macOS would repeat after the version.
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits, .version: ""])
     }
 }
 
