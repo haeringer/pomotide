@@ -1,6 +1,6 @@
 <h1><img src="docs/icon.png" width="40" alt=""> PomoTide</h1>
 
-Pomodoro timer for the macOS menu bar that switches Do Not Disturb on and off for you and plays your Apple Music or Spotify playlist while you focus.
+Pomodoro timer for the macOS menu bar, built around real breaks without interruptions and the option to play your own focus music automatically.
 
 ## Features
 
@@ -9,11 +9,11 @@ Pomodoro timer for the macOS menu bar that switches Do Not Disturb on and off fo
   <img src="docs/screenshot.png" align="right" width="300" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons">
 </picture>
 
-- Focus and break run back to back, with an optional long break after a set number of sessions
-- Do Not Disturb during breaks, or during focus if you prefer
-- While you focus: ticking from real clock recordings, or an Apple Music or Spotify playlist that pauses during breaks
-- During breaks: a gong or singing bowl, plus ocean waves or white, pink or brown noise that swells and ebbs like surf
-- Remaining time in the menu bar, drag the ring to shorten a phase, ⇧⌥⌘P to start and pause from anywhere
+- macOS Do Not Disturb during breaks (or during focus if you prefer)
+- While you focus: clock ticking or an Apple Music or Spotify playlist
+- During breaks: relaxing sounds like a singing bowl and ocean waves
+- Remaining time in the menu bar
+- Drag the ring to adjust the remaining time, ⇧⌥⌘P to start and pause from anywhere
 - Native SwiftUI, no dependencies
 
 <br clear="right">
