@@ -38,7 +38,7 @@ git clone https://github.com/haeringer/pomotide.git && cd pomotide
 log stream --predicate 'subsystem == "io.github.haeringer.pomotide"' --level info
 ```
 
-`tools/` has the scripts that generate the bundled shortcuts and the app icon; both results are committed. To release, push a tag like `v1.2.3`, then update version and checksum in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide).
+`tools/` has the scripts that generate the bundled shortcuts and the app icon; both results are committed. To release, push a tag like `v1.2.3`; the workflow publishes the zip and updates the cask in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide).
 
 ## License
 
