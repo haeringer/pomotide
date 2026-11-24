@@ -1,82 +1,45 @@
-# PomoTide
+<h1><img src="docs/icon.png" width="40" alt=""> PomoTide</h1>
 
-A small Pomodoro timer that lives in the macOS menu bar. Features automatically turning on/off DoNotDisturb mode and playing/stopping playlists from Apple Music or Spotify.
-
-<p align="center"><img src="docs/screenshot.png" width="340" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons"></p>
+Pomodoro timer for the macOS menu bar that switches Do Not Disturb on and off for you and plays your Apple Music or Spotify playlist while you focus.
 
 ## Features
 
-- Adjustable focus and break length, optional long break after a set number of sessions
-- Remaining time in the menu bar, controls in a popover, start and pause from anywhere with ⇧⌥⌘P
-- Ticking during focus from real clock recordings, or Apple Music or Spotify instead: pick a playlist, music pauses during breaks and continues afterwards
-- Gong or singing bowl at the start and end of every break
-- Optional sound during breaks: ocean waves, or white, pink or brown noise that swells and ebbs like surf
-- macOS Do Not Disturb mode during breaks or during focus
-- Native Swift and SwiftUI, no dependencies, light on resources
+<img src="docs/screenshot.png" align="right" width="300" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons">
 
-## Requirements
+- Focus and break run back to back, with an optional long break after a set number of sessions
+- Do Not Disturb during breaks, or during focus if you prefer
+- While you focus: ticking from real clock recordings, or an Apple Music or Spotify playlist that pauses during breaks
+- During breaks: a gong or singing bowl, plus ocean waves or white, pink or brown noise that swells and ebbs like surf
+- Remaining time in the menu bar, drag the ring to shorten a phase, ⇧⌥⌘P to start and pause from anywhere
+- Native SwiftUI, no dependencies
 
-macOS 26 or later.
+<br clear="right">
 
 ## Install
-
-With [Homebrew](https://brew.sh):
 
 ```sh
 brew install --cask haeringer/pomotide/pomotide
 ```
 
-PomoTide is not notarized by Apple (that needs a paid developer account). The Homebrew cask therefore removes the download quarantine, so macOS opens it without a warning. If you download the zip from [Releases](https://github.com/haeringer/pomotide/releases) instead, macOS blocks the first start; allow it under System Settings > Privacy & Security > **Open Anyway**.
+Or download the zip from [Releases](https://github.com/haeringer/pomotide/releases/latest). PomoTide is not notarized, so macOS blocks the first launch of the zip version; allow it under System Settings > Privacy & Security > **Open Anyway**. Homebrew takes care of this for you.
 
-### Build from source
+## Do Not Disturb
 
-You need the Xcode Command Line Tools (`xcode-select --install`) with Swift 6.2 or later.
-
-```sh
-git clone https://github.com/haeringer/pomotide.git
-cd pomotide
-./build.sh --install
-open ~/Applications/PomoTide.app
-```
-
-`./build.sh` alone builds `build/PomoTide.app` without installing it.
-
-To start PomoTide at login, turn on **Start at login** in its settings.
-
-## Do Not Disturb setup
-
-macOS has no public API for apps to switch Focus, but Shortcuts can. PomoTide ships two signed shortcuts, "PomoTide Focus On" and "PomoTide Focus Off", and runs them when a phase changes.
-
-1. Open PomoTide from the menu bar and click **Set Up**.
-2. Shortcuts opens twice; click **Add Shortcut** each time.
-
-Settings shows "Shortcuts installed" once both are there. Without them the timer works normally, it just does not touch Do Not Disturb. To use your own Focus instead of Do Not Disturb, change the Focus in both shortcuts in the Shortcuts app.
+Apps can only switch Focus through Shortcuts, so PomoTide comes with two signed shortcuts. Click **Set Up** in the popover and add both. To use a different Focus than Do Not Disturb, change it in both shortcuts in the Shortcuts app.
 
 ## Development
 
-| Path | Purpose |
-|---|---|
-| `Sources/PomoTide/` | App code |
-| `Tests/PomoTideTests/` | Unit tests, run with `./test.sh` |
-| `Resources/Sounds/` | Bundled sounds |
-| `Resources/Shortcuts/` | Signed Focus shortcuts |
-| `tools/make_shortcuts.py` | Generates and signs the shortcuts (needs a Mac signed in to iCloud) |
-| `tools/make_icon.swift` | Draws the app icon into `Resources/AppIcon.icns` |
-
-The shortcuts and icon are committed, so a normal build needs neither tool.
-
-Logs go to the unified log:
+Needs the Xcode Command Line Tools with Swift 6.2 or later.
 
 ```sh
+git clone https://github.com/haeringer/pomotide.git && cd pomotide
+./build.sh             # builds build/PomoTide.app, --install copies it to ~/Applications
+./test.sh              # runs the unit tests
 log stream --predicate 'subsystem == "io.github.haeringer.pomotide"' --level info
 ```
 
-To release, push a tag like `v0.1.0`. The release workflow builds a universal app, publishes `PomoTide-0.1.0.zip` with its SHA-256, and the cask in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide) then needs the new version and checksum.
-
-## Sound credits
-
-All bundled sounds are CC0 recordings, see [CREDITS.md](CREDITS.md).
+`tools/` has the scripts that generate the bundled shortcuts and the app icon; both results are committed. To release, push a tag like `v1.2.3`, then update version and checksum in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide).
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). The bundled sounds are CC0 recordings, see [CREDITS.md](CREDITS.md).
