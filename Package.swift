@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "PomoTide",
             path: "Sources/PomoTide"
-        )
+        ),
+        .testTarget(
+            name: "PomoTideTests",
+            dependencies: ["PomoTide"],
+            path: "Tests/PomoTideTests"
+        ),
     ]
 )

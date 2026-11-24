@@ -34,7 +34,8 @@ struct TimerView: View {
             }
 
             ProgressRing(progress: timer.progress, tint: timer.phase.isBreak ? .teal : .accentColor,
-                         onSeek: timer.phase == .idle ? nil : { timer.seek(to: $0) }) {
+                         onSeek: timer.phase == .idle ? nil : { timer.seek(to: $0) },
+                         onSeekEnd: { timer.seekEnded() }) {
                 VStack(spacing: 2) {
                     Text(timer.remainingText)
                         .font(.system(size: 44, weight: .light, design: .rounded))
@@ -118,6 +119,8 @@ struct ProgressRing<Content: View>: View {
     let tint: Color
     /// Called with the new progress (0...1) while the ring is dragged; nil makes the ring static.
     var onSeek: ((Double) -> Void)?
+    /// Called once when a drag ends.
+    var onSeekEnd: (() -> Void)?
     @ViewBuilder let content: Content
 
     @State private var dragging = false
@@ -172,15 +175,25 @@ struct ProgressRing<Content: View>: View {
                     dragging = true
                     lastProgress = progress
                 }
-                // Angle from the top, clockwise, as 0...1.
-                let angle = atan2(value.location.x - center.x, center.y - value.location.y)
-                var p = angle >= 0 ? angle / (2 * .pi) : 1 + angle / (2 * .pi)
-                // Crossing the top would jump between start and end; stop at the nearer end instead.
-                if abs(p - lastProgress) > 0.5 { p = lastProgress > 0.5 ? 1 : 0 }
+                let p = RingDrag.progress(at: value.location, center: center, last: lastProgress)
                 lastProgress = p
                 onSeek(p)
             }
-            .onEnded { _ in dragging = false }
+            .onEnded { _ in
+                if dragging { onSeekEnd?() }
+                dragging = false
+            }
+    }
+}
+
+enum RingDrag {
+    /// Position on the ring as 0...1, clockwise from the top. Crossing the top would jump
+    /// between start and end, so it stops at whichever end `last` was nearer to instead.
+    static func progress(at point: CGPoint, center: CGPoint, last: Double) -> Double {
+        let angle = atan2(point.x - center.x, center.y - point.y)
+        let p = angle >= 0 ? angle / (2 * .pi) : 1 + angle / (2 * .pi)
+        if abs(p - last) > 0.5 { return last > 0.5 ? 1 : 0 }
+        return p
     }
 }
 

@@ -196,6 +196,7 @@ private struct StartAtLoginToggle: View {
                 ? "Allow PomoTide under System Settings > General > Login Items & Extensions."
                 : nil
         } catch {
+            Log.app.error("Changing the login item failed: \(error.localizedDescription, privacy: .public)")
             problem = error.localizedDescription
         }
         enabled = SMAppService.mainApp.status == .enabled

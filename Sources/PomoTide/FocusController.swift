@@ -20,13 +20,17 @@ final class FocusController {
         let output = await Self.run(["list"]) ?? ""
         let names = Set(output.split(separator: "\n").map(String.init))
         shortcutsInstalled = names.contains(Self.onShortcut) && names.contains(Self.offShortcut)
+        if !shortcutsInstalled { Log.focus.notice("Focus shortcuts are not installed") }
     }
 
     func set(_ on: Bool) {
         guard on != isOn, shortcutsInstalled else { return }
         isOn = on
         let name = on ? Self.onShortcut : Self.offShortcut
-        Task { _ = await Self.run(["run", name]) }
+        Log.focus.info("Running shortcut \(name, privacy: .public)")
+        Task {
+            if await Self.run(["run", name]) == nil { Log.focus.error("Shortcut \(name, privacy: .public) failed") }
+        }
     }
 
     /// Synchronous variant for app termination, where an async task would not finish.
@@ -61,6 +65,7 @@ final class FocusController {
                 do {
                     try p.run()
                 } catch {
+                    Log.focus.error("Could not start shortcuts: \(error.localizedDescription, privacy: .public)")
                     continuation.resume(returning: nil)
                     return
                 }

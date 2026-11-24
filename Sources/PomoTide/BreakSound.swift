@@ -40,20 +40,33 @@ final class BreakSoundPlayer {
         let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
         switch sound {
         case .waves:
-            guard let buffer = Self.loadWaves() else { return }
+            guard let buffer = Self.loadWaves() else {
+                Log.sound.error("Could not load waves.m4a")
+                return
+            }
             let node = AVAudioPlayerNode()
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
             node.scheduleBuffer(buffer, at: nil, options: .loops)
             engine.mainMixerNode.outputVolume = 0
-            guard (try? engine.start()) != nil else { return }
+            do {
+                try engine.start()
+            } catch {
+                Log.sound.error("Audio engine for break sound failed to start: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             node.play()
         default:
             let node = Self.makeNoiseNode(sound, format: format)
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: format)
             engine.mainMixerNode.outputVolume = 0
-            guard (try? engine.start()) != nil else { return }
+            do {
+                try engine.start()
+            } catch {
+                Log.sound.error("Audio engine for break sound failed to start: \(error.localizedDescription, privacy: .public)")
+                return
+            }
         }
         self.engine = engine
         current = sound

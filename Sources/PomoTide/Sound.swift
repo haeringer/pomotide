@@ -44,7 +44,10 @@ final class TickPlayer {
         if isPlaying, sound == self.sound { return }
         stop()
         load(sound)
-        guard let format = ticks[0].first?.format else { return }
+        guard let format = ticks[0].first?.format else {
+            Log.sound.error("No tick recordings found for \(sound.rawValue, privacy: .public)")
+            return
+        }
         self.sound = sound
         sampleRate = format.sampleRate
         engine.connect(node, to: engine.mainMixerNode, format: format)
@@ -53,7 +56,7 @@ final class TickPlayer {
         do {
             try engine.start()
         } catch {
-            NSLog("PomoTide: audio engine failed to start: \(error)")
+            Log.sound.error("Audio engine for ticking failed to start: \(error.localizedDescription, privacy: .public)")
             return
         }
         node.play()
@@ -171,7 +174,10 @@ final class TransitionPlayer {
         for sound in TransitionSound.allCases {
             guard let url = Bundle.main.url(forResource: sound.fileName, withExtension: "wav", subdirectory: "Sounds"),
                   let player = try? AVAudioPlayer(contentsOf: url)
-            else { continue }
+            else {
+                Log.sound.error("Could not load \(sound.fileName, privacy: .public).wav")
+                continue
+            }
             player.prepareToPlay()
             players[sound] = player
         }

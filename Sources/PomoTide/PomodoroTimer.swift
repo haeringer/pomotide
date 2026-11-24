@@ -18,8 +18,7 @@ enum Phase: Equatable {
 
 /// The Pomodoro cycle. Focus and breaks follow each other automatically until stopped.
 ///
-/// Time is tracked as an end date rather than a counter, so sleep or a busy main
-/// thread cannot make the timer drift. A 1 Hz UI timer only runs while a phase is active.
+/// The time arithmetic lives in `PhaseClock`. A 1 Hz UI timer only runs while a phase is active.
 @MainActor
 @Observable
 final class PomodoroTimer {
@@ -44,14 +43,12 @@ final class PomodoroTimer {
     private let transition = TransitionPlayer()
 
     private(set) var phase: Phase = .idle
-    private(set) var isPaused = false
     /// Completed focus sessions since the last long break (or since start).
     private(set) var completedFocus = 0
+    /// Refreshed every second while running, so views showing the time update.
     private(set) var now = Date()
 
-    private var phaseEnd = Date()
-    private var phaseDuration: TimeInterval = 1
-    private var pausedRemaining: TimeInterval = 0
+    private var phaseClock = PhaseClock()
     private var clock: Timer?
     private var fadeOutTimer: Timer?
     /// Ticking or music fades out over the last seconds of a focus phase, before the gong.
@@ -82,6 +79,7 @@ final class PomodoroTimer {
     private func updateHotKey() {
         if settings.globalShortcut {
             hotKeyAvailable = hotKey.register { [weak self] in self?.toggle() }
+            if !hotKeyAvailable { Log.app.notice("\(HotKey.displayName, privacy: .public) is already used by another app") }
         } else {
             hotKey.unregister()
             hotKeyAvailable = true
@@ -90,16 +88,15 @@ final class PomodoroTimer {
 
     // MARK: State
 
+    var isPaused: Bool { phase != .idle && phaseClock.isPaused }
+
     var remaining: TimeInterval {
-        switch phase {
-        case .idle: TimeInterval(settings.focusMinutes * 60)
-        default: isPaused ? pausedRemaining : max(0, phaseEnd.timeIntervalSince(now))
-        }
+        phase == .idle ? TimeInterval(settings.focusMinutes * 60) : phaseClock.remaining(at: now)
     }
 
     /// 0 at the start of a phase, 1 at its end.
     var progress: Double {
-        phase == .idle ? 0 : 1 - remaining / phaseDuration
+        phase == .idle ? 0 : phaseClock.progress(at: now)
     }
 
     var remainingText: String {
@@ -121,9 +118,10 @@ final class PomodoroTimer {
 
     func pause() {
         guard isRunning else { return }
-        // Measure against the current time, not `now`, which may be up to a second old.
-        pausedRemaining = max(0, phaseEnd.timeIntervalSinceNow)
-        isPaused = true
+        // `now` may be up to a second old; measure against the current time.
+        now = Date()
+        phaseClock.pause(at: now)
+        Log.timer.info("Paused \(self.phase.title, privacy: .public) with \(Int(self.remaining)) s left")
         ticker.stop()
         breakSound.stop()
         players.forEach { $0.pause() }
@@ -132,18 +130,19 @@ final class PomodoroTimer {
     }
 
     func resume() {
-        guard phase != .idle, isPaused else { return }
+        guard isPaused else { return }
         // `now` stood still during the pause; update it together with the end date,
         // or the first second after resuming shows the pause added to the remaining time.
         now = Date()
-        phaseEnd = now.addingTimeInterval(pausedRemaining)
-        isPaused = false
+        phaseClock.resume(at: now)
+        Log.timer.info("Resumed \(self.phase.title, privacy: .public)")
         startClock()
         applyEffects()
     }
 
     func skip() {
         guard phase != .idle else { return }
+        Log.timer.info("Skipped \(self.phase.title, privacy: .public) with \(Int(self.remaining)) s left")
         advance(completed: false)
     }
 
@@ -151,20 +150,21 @@ final class PomodoroTimer {
     /// Works while running and while paused; the phase length itself stays the same.
     func seek(to progress: Double) {
         guard phase != .idle else { return }
-        // Keep at least a second, so dragging to the very end does not switch phases mid-drag.
-        let left = max(1, phaseDuration * (1 - min(1, max(0, progress))))
         now = Date()
-        if isPaused {
-            pausedRemaining = left
-        } else {
-            phaseEnd = now.addingTimeInterval(left)
-            updateFadeOut()
-        }
+        phaseClock.seek(to: progress, at: now)
+        if !isPaused { updateFadeOut() }
+    }
+
+    /// Logged once per drag; `seek` runs for every pointer movement.
+    func seekEnded() {
+        guard phase != .idle else { return }
+        Log.timer.info("Moved \(self.phase.title, privacy: .public) to \(Int(self.remaining)) s left")
     }
 
     func stop() {
+        Log.timer.info("Stopped")
         phase = .idle
-        isPaused = false
+        phaseClock = PhaseClock()
         completedFocus = 0
         stopClock()
         ticker.stop()
@@ -188,16 +188,15 @@ final class PomodoroTimer {
     private func enter(_ next: Phase) {
         let previous = phase
         phase = next
-        isPaused = false
         let minutes = switch next {
         case .focus: settings.focusMinutes
         case .shortBreak: settings.breakMinutes
         case .longBreak: settings.longBreakMinutes
         case .idle: 0
         }
-        phaseDuration = TimeInterval(max(1, minutes) * 60)
         now = Date()
-        phaseEnd = now.addingTimeInterval(phaseDuration)
+        phaseClock = PhaseClock(duration: TimeInterval(max(1, minutes) * 60), start: now)
+        Log.timer.info("Entered \(next.title, privacy: .public) for \(max(1, minutes)) min")
         startClock()
         // Transition sound at the start and the end of every break, not when the first focus starts.
         var tickFadeIn: TimeInterval = 0
@@ -211,20 +210,11 @@ final class PomodoroTimer {
     }
 
     private func advance(completed: Bool) {
-        switch phase {
-        case .focus:
-            if completed { completedFocus += 1 }
-            if settings.longBreakEnabled, completedFocus >= max(1, settings.longBreakEvery) {
-                completedFocus = 0
-                enter(.longBreak)
-            } else {
-                enter(.shortBreak)
-            }
-        case .shortBreak, .longBreak:
-            enter(.focus)
-        case .idle:
-            break
-        }
+        guard phase != .idle else { return }
+        let (next, done) = phase.next(completed: completed, completedFocus: completedFocus,
+                                      longBreakEvery: settings.longBreakEnabled ? settings.longBreakEvery : nil)
+        completedFocus = done
+        enter(next)
     }
 
     private func applyEffects(tickFadeIn: TimeInterval = 0) {
@@ -269,14 +259,14 @@ final class PomodoroTimer {
 
     private func tick() {
         now = Date()
-        if !isPaused, now >= phaseEnd { advance(completed: true) }
+        if phaseClock.isFinished(at: now) { advance(completed: true) }
         updateFadeOut()
     }
 
     // MARK: Fade-out
 
     private func updateFadeOut() {
-        let left = phaseEnd.timeIntervalSinceNow
+        let left = phaseClock.remaining(at: Date())
         guard phase == .focus, !isPaused, left <= Self.fadeOutDuration else { return endFadeOut() }
         if fadeOutTimer == nil {
             // Finer steps than the 1 Hz clock, which matters for music.

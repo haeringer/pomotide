@@ -97,7 +97,9 @@ final class MusicController {
     private func restoreInterruptedFade() {
         guard baseVolume == nil, isRunning,
               UserDefaults.standard.object(forKey: pendingVolumeKey) != nil else { return }
-        setVolume(UserDefaults.standard.integer(forKey: pendingVolumeKey))
+        let volume = UserDefaults.standard.integer(forKey: pendingVolumeKey)
+        Log.music.notice("\(self.app.name, privacy: .public): restoring volume \(volume) left over from an interrupted fade")
+        setVolume(volume)
         if problem == nil { UserDefaults.standard.removeObject(forKey: pendingVolumeKey) }
     }
 
@@ -105,6 +107,7 @@ final class MusicController {
     /// If a fade was in progress, the volume is restored once playback has really stopped.
     func pause() {
         if owned, isRunning, state == "playing" {
+            Log.music.info("\(self.app.name, privacy: .public): pausing own playback")
             tell("pause")
             restoreVolumeWhenSilent()
         } else {
@@ -143,6 +146,7 @@ final class MusicController {
     /// keep playing, and the next launch would take it for the user's own and never pause it.
     func quit() {
         if owned, isRunning, state == "playing" {
+            Log.music.info("\(self.app.name, privacy: .public): pausing own playback before quitting")
             tell("pause")
             // Let the output drain before the volume goes back up, as in `restoreVolumeWhenSilent`.
             if baseVolume != nil { Thread.sleep(forTimeInterval: 0.5) }
@@ -156,6 +160,7 @@ final class MusicController {
         guard owned, isRunning else { return }
         if baseVolume == nil {
             guard let v = tell("get sound volume").flatMap({ Int($0) }) else { return }
+            Log.music.debug("\(self.app.name, privacy: .public): fade starts from volume \(v)")
             baseVolume = v
         }
         let target = Int((Float(baseVolume ?? 0) * max(0, min(1, level))).rounded())
@@ -173,6 +178,7 @@ final class MusicController {
         guard let v = baseVolume else { return }
         baseVolume = nil
         lastSetVolume = nil
+        Log.music.debug("\(self.app.name, privacy: .public): fade ended, restoring volume \(v)")
         if isRunning { setVolume(v) }
     }
 
@@ -218,6 +224,7 @@ final class MusicController {
         let current = state
         if current == "playing" {
             // Either the user's own music (leave it) or ours (already fine).
+            if !owned { Log.music.info("\(self.app.name, privacy: .public): already playing music the user started, leaving it alone") }
             return
         }
         let resuming = owned && current == "paused"
@@ -226,6 +233,7 @@ final class MusicController {
             owned = true
             setFadeLevel(0)
         }
+        Log.music.info("\(self.app.name, privacy: .public): \(resuming ? "resuming" : playlist.isEmpty ? "continuing last played" : "starting playlist", privacy: .public), fade-in \(fadeIn, format: .fixed(precision: 0)) s")
         if resuming || playlist.isEmpty {
             tell("play")
         } else {
@@ -258,14 +266,19 @@ final class MusicController {
     private func launch(then action: @escaping @MainActor () -> Void) {
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app.bundleID) else {
             problem = "\(app.name) is not installed."
+            Log.music.error("\(self.app.name, privacy: .public) is not installed")
             return
         }
         let config = NSWorkspace.OpenConfiguration()
         config.activates = false
         config.hides = true
         let delay = app.launchDelay
+        Log.music.info("\(self.app.name, privacy: .public): launching")
         NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
-            guard error == nil else { return }
+            if let error {
+                Log.music.error("Launching \(url.lastPathComponent, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                 MainActor.assumeIsolated { action() }
             }
@@ -282,10 +295,12 @@ final class MusicController {
         if let error {
             guard reportErrors else { return nil }
             let code = error[NSAppleScript.errorNumber] as? Int ?? 0
+            let message = error[NSAppleScript.errorMessage] as? String
+            Log.music.error("\(self.app.name, privacy: .public): AppleScript error \(code): \(message ?? "no message", privacy: .public), script: \(commands)")
             needsPermission = code == -1743
             problem = needsPermission
                 ? "PomoTide is not allowed to control \(app.name)."
-                : (error[NSAppleScript.errorMessage] as? String ?? "\(app.name) did not respond.")
+                : (message ?? "\(app.name) did not respond.")
             return nil
         }
         if reportErrors {

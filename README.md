@@ -57,12 +57,19 @@ Settings shows "Shortcuts installed" once both are there. Without them the timer
 | Path | Purpose |
 |---|---|
 | `Sources/PomoTide/` | App code |
+| `Tests/PomoTideTests/` | Unit tests, run with `./test.sh` |
 | `Resources/Sounds/` | Bundled sounds |
 | `Resources/Shortcuts/` | Signed Focus shortcuts |
 | `tools/make_shortcuts.py` | Generates and signs the shortcuts (needs a Mac signed in to iCloud) |
 | `tools/make_icon.swift` | Draws the app icon into `Resources/AppIcon.icns` |
 
 The shortcuts and icon are committed, so a normal build needs neither tool.
+
+Logs go to the unified log:
+
+```sh
+log stream --predicate 'subsystem == "io.github.haeringer.pomotide"' --level info
+```
 
 To release, push a tag like `v0.1.0`. The release workflow builds a universal app, publishes `PomoTide-0.1.0.zip` with its SHA-256, and the cask in [haeringer/homebrew-pomotide](https://github.com/haeringer/homebrew-pomotide) then needs the new version and checksum.
 
