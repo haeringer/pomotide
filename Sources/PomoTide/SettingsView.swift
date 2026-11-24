@@ -124,20 +124,59 @@ private struct MusicSettings: View {
 private struct SpotifySettings: View {
     @Environment(PomodoroTimer.self) private var timer
     @Environment(Settings.self) private var settings
+    @State private var clipboardProblem = false
 
     var body: some View {
         @Bindable var settings = settings
-        // Spotify does not list its playlists for other apps, so it takes a pasted link.
-        TextField("Playlist", text: $settings.spotifyLink, prompt: Text("Continue last played"))
-        if !settings.spotifyLink.isEmpty {
-            if SpotifyLink.uri(from: settings.spotifyLink) == nil {
-                Label("Paste a link from Spotify's Share menu.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+        // Spotify does not list its playlists for other apps, so it takes a link from its Share menu.
+        let uri = SpotifyLink.uri(from: settings.spotifyLink)
+        LabeledContent("Playlist") {
+            HStack(spacing: 6) {
+                Text(uri.map { settings.spotifyName.isEmpty ? SpotifyLink.kind(of: $0) : settings.spotifyName }
+                     ?? "Continue last played")
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(uri == nil ? .secondary : .primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if uri != nil {
+                    Button { setLink("") } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("Continue last played instead")
+                } else {
+                    Text("or").foregroundStyle(.secondary)
+                }
+                Button("Paste Link") { pasteLink() }
             }
+        }
+        .task(id: settings.spotifyLink) {
+            guard let uri, settings.spotifyName.isEmpty, let name = await SpotifyLink.title(for: uri),
+                  SpotifyLink.uri(from: settings.spotifyLink) == uri else { return }
+            settings.spotifyName = name
+        }
+        Text("In Spotify, right-click a playlist or album and choose Share > Copy link to playlist (or album), then click Paste Link.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        if clipboardProblem {
+            Label("The clipboard holds no Spotify link.", systemImage: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+        }
+        if uri != nil {
             Toggle("Shuffle", isOn: $settings.musicShuffle)
         }
         Toggle("Open Spotify if it is not running", isOn: $settings.musicOpenIfNeeded)
         PlayerStatus(player: timer.spotify)
+    }
+
+    private func pasteLink() {
+        let text = NSPasteboard.general.string(forType: .string) ?? ""
+        clipboardProblem = SpotifyLink.uri(from: text) == nil
+        if !clipboardProblem { setLink(text) }
+    }
+
+    private func setLink(_ text: String) {
+        settings.spotifyName = ""
+        settings.spotifyLink = text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -158,11 +197,11 @@ private struct PlayerStatus: View {
                 }
             }
         }
-        Text(player.app == .spotify
-             ? "Paste a link to a playlist or album, or leave it empty to continue the last one. Spotify pauses during breaks and continues where it stopped. Music you started yourself is left alone."
-             : "Music pauses during breaks and continues where it stopped. Music you started yourself is left alone.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+        if player.app == .appleMusic {
+            Text("Music pauses during breaks and continues where it stopped. Music you started yourself is left alone.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

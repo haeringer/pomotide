@@ -69,6 +69,8 @@ final class Settings {
     var musicPlaylist: String { didSet { defaults.set(musicPlaylist, forKey: "musicPlaylist") } }
     /// Spotify link as pasted; "" continues whatever Spotify played last.
     var spotifyLink: String { didSet { defaults.set(spotifyLink, forKey: "spotifyLink") } }
+    /// Title of the linked playlist or album; "" until it has been looked up.
+    var spotifyName: String { didSet { defaults.set(spotifyName, forKey: "spotifyName") } }
     /// Shuffle and open-if-needed apply to Apple Music and Spotify alike.
     var musicShuffle: Bool { didSet { defaults.set(musicShuffle, forKey: "musicShuffle") } }
     var musicOpenIfNeeded: Bool { didSet { defaults.set(musicOpenIfNeeded, forKey: "musicOpenIfNeeded") } }
@@ -94,6 +96,7 @@ final class Settings {
             "tickVolume": 0.5,
             "musicPlaylist": "",
             "spotifyLink": "",
+            "spotifyName": "",
             "musicShuffle": false,
             "musicOpenIfNeeded": true,
             "transitionSound": TransitionSound.gong.rawValue,
@@ -114,6 +117,7 @@ final class Settings {
         tickVolume = defaults.double(forKey: "tickVolume")
         musicPlaylist = defaults.string(forKey: "musicPlaylist") ?? ""
         spotifyLink = defaults.string(forKey: "spotifyLink") ?? ""
+        spotifyName = defaults.string(forKey: "spotifyName") ?? ""
         musicShuffle = defaults.bool(forKey: "musicShuffle")
         musicOpenIfNeeded = defaults.bool(forKey: "musicOpenIfNeeded")
         transitionSound = TransitionSound(rawValue: defaults.string(forKey: "transitionSound") ?? "") ?? .gong

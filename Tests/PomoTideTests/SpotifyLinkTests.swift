@@ -22,4 +22,9 @@ struct SpotifyLinkTests {
     func rejectsEverythingElse(text: String) {
         #expect(SpotifyLink.uri(from: text) == nil)
     }
+
+    @Test func looksUpTheTitleOfThePublicPage() {
+        #expect(SpotifyLink.oEmbedURL(for: "spotify:playlist:37i9dQZF1DX8NTLI2TtZa6")?.absoluteString
+                == "https://open.spotify.com/oembed?url=https://open.spotify.com/playlist/37i9dQZF1DX8NTLI2TtZa6")
+    }
 }

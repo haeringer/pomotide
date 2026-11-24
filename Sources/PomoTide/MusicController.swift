@@ -341,4 +341,34 @@ enum SpotifyLink {
     private static func isID(_ s: some StringProtocol) -> Bool {
         !s.isEmpty && s.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber) }
     }
+
+    /// "Playlist", "Album" and so on, for a URI returned by `uri(from:)`.
+    static func kind(of uri: String) -> String {
+        uri.split(separator: ":").dropFirst().first.map { $0.capitalized } ?? ""
+    }
+
+    /// Spotify's oEmbed endpoint, which answers with the title of a public page without an account.
+    static func oEmbedURL(for uri: String) -> URL? {
+        let parts = uri.split(separator: ":")
+        guard parts.count == 3 else { return nil }
+        var components = URLComponents(string: "https://open.spotify.com/oembed")
+        components?.queryItems = [URLQueryItem(name: "url", value: "https://open.spotify.com/\(parts[1])/\(parts[2])")]
+        return components?.url
+    }
+
+    static func title(for uri: String) async -> String? {
+        guard let url = oEmbedURL(for: uri) else { return nil }
+        struct OEmbed: Decodable { let title: String }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 10))
+            guard let status = (response as? HTTPURLResponse)?.statusCode, status == 200 else {
+                Log.music.error("Spotify title lookup for \(uri, privacy: .public) failed with HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+                return nil
+            }
+            return try JSONDecoder().decode(OEmbed.self, from: data).title
+        } catch {
+            Log.music.error("Spotify title lookup for \(uri, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
 }
