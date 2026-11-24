@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "${0:A:h}"
 
-VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')}"
+VERSION="${VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)}"
 VERSION="${VERSION:-0.0.0}"
 APP="build/PomoTide.app"
 
