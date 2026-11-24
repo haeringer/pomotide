@@ -20,30 +20,40 @@ struct MenuBarLabel: View {
     let timer: PomodoroTimer
 
     var body: some View {
-        let symbol = switch (timer.phase, timer.isPaused) {
-        case (.idle, _): "timer"
+        // nil: the app's own ring and wave, before the start and during focus.
+        let symbol: String? = switch (timer.phase, timer.isPaused) {
+        case (.idle, _): nil
         case (_, true): "pause.circle"
-        case (.focus, _): "timer"
+        case (.focus, _): nil
         default: "figure.mind.and.body"
         }
         if timer.phase != .idle, timer.settings.showTimeInMenuBar {
-            Image(nsImage: Self.pill(symbol: symbol, text: timer.remainingText))
+            Image(nsImage: Self.pill(icon: Self.icon(symbol, size: 13), text: timer.remainingText))
         } else {
-            Image(systemName: symbol)
+            Image(nsImage: Self.icon(symbol, size: 16))
         }
     }
 
-    /// Symbol and remaining time on a soft rounded background.
+    private static func icon(_ symbol: String?, size: CGFloat) -> NSImage {
+        guard let symbol,
+              let image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(
+                  // Same sizes and weights the symbols had before: 13 pt regular alone, 12 pt medium in the pill.
+                  size > 14 ? NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+                      : NSImage.SymbolConfiguration(pointSize: 12, weight: .medium, scale: .medium))
+        else { return MenuBarIcon.image(size: size) }
+        image.isTemplate = true
+        return image
+    }
+
+    /// Icon and remaining time on a soft rounded background.
     ///
     /// SwiftUI ignores backgrounds in menu bar labels, so this draws a template
     /// image: only alpha counts, and macOS tints it to match the menu bar.
-    /// The background is drawn at low alpha, symbol and text at full alpha.
-    static func pill(symbol: String, text: String) -> NSImage {
+    /// The background is drawn at low alpha, icon and text at full alpha.
+    static func pill(icon: NSImage, text: String) -> NSImage {
         let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         let label = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: NSColor.black])
-        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium, scale: .medium)
-        let icon = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(config)
-        let iconSize = icon?.size ?? .zero
+        let iconSize = icon.size
         let textSize = label.size()
         let padding: CGFloat = 6, gap: CGFloat = 4, height: CGFloat = 18
         let width = ceil(padding + iconSize.width + gap + textSize.width + padding)
@@ -51,10 +61,8 @@ struct MenuBarLabel: View {
         let image = NSImage(size: NSSize(width: width, height: height), flipped: false) { rect in
             NSColor.black.withAlphaComponent(0.18).setFill()
             NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
-            if let icon {
-                icon.draw(in: NSRect(x: padding, y: (height - iconSize.height) / 2,
-                                     width: iconSize.width, height: iconSize.height))
-            }
+            icon.draw(in: NSRect(x: padding, y: (height - iconSize.height) / 2,
+                                 width: iconSize.width, height: iconSize.height))
             label.draw(at: NSPoint(x: padding + iconSize.width + gap, y: (height - textSize.height) / 2))
             return true
         }
