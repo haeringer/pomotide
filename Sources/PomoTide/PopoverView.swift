@@ -31,6 +31,20 @@ struct TimerView: View {
                 if settings.longBreakEnabled {
                     RoundDots(done: timer.completedFocus, total: settings.longBreakEvery)
                 }
+                Menu {
+                    Button("Settings…", action: openSettings)
+                    Divider()
+                    Button("Quit PomoTide") { NSApp.terminate(nil) }
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.borderless)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .foregroundStyle(.secondary)
+                .help("Settings and Quit")
+                .accessibilityLabel("Settings and Quit")
             }
 
             ProgressRing(progress: timer.progress, tint: timer.phase.isBreak ? .teal : .accentColor,
@@ -76,16 +90,6 @@ struct TimerView: View {
             if needsFocusSetup {
                 FocusSetupHint()
             }
-
-            HStack {
-                Button("Settings", systemImage: "gearshape", action: openSettings)
-                Spacer()
-                Button("Quit PomoTide", systemImage: "xmark.circle") { NSApp.terminate(nil) }
-                    .help("Quit PomoTide")
-            }
-            .buttonStyle(.borderless)
-            .labelStyle(.iconOnly)
-            .foregroundStyle(.secondary)
         }
         .padding(16)
     }
