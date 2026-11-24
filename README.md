@@ -4,7 +4,10 @@ Pomodoro timer for the macOS menu bar that switches Do Not Disturb on and off fo
 
 ## Features
 
-<img src="docs/screenshot.png" align="right" width="300" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img src="docs/screenshot.png" align="right" width="300" alt="PomoTide popover during a focus session, showing the remaining time in a progress ring with stop, pause and skip buttons">
+</picture>
 
 - Focus and break run back to back, with an optional long break after a set number of sessions
 - Do Not Disturb during breaks, or during focus if you prefer
