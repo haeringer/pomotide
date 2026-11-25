@@ -51,7 +51,7 @@ final class PomodoroTimer {
     private var phaseClock = PhaseClock()
     private var clock: Timer?
     private var fadeOutTimer: Timer?
-    /// Ticking or music fades out over the last seconds of a focus phase, before the gong.
+    /// Ticking, music or the break sound fades out over the last seconds of a phase, before the gong.
     private static let fadeOutDuration: TimeInterval = 5
     private var terminationSignal: DispatchSourceSignal?
 
@@ -267,7 +267,7 @@ final class PomodoroTimer {
 
     private func updateFadeOut() {
         let left = phaseClock.remaining(at: Date())
-        guard phase == .focus, !isPaused, left <= Self.fadeOutDuration else { return endFadeOut() }
+        guard phase != .idle, !isPaused, left <= Self.fadeOutDuration else { return endFadeOut() }
         if fadeOutTimer == nil {
             // Finer steps than the 1 Hz clock, which matters for music.
             let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -277,16 +277,22 @@ final class PomodoroTimer {
             fadeOutTimer = timer
         }
         let level = Float(max(0, left) / Self.fadeOutDuration)
-        ticker.level = level
-        activePlayer?.setFadeLevel(level)
+        if phase.isBreak {
+            breakSound.level = level
+        } else {
+            ticker.level = level
+            activePlayer?.setFadeLevel(level)
+        }
     }
 
     /// Stops a running fade-out. The music volume is restored by `pause()` or here.
+    /// A break sound that faded out stays silent while it stops, so the gong rings alone.
     private func endFadeOut() {
         guard fadeOutTimer != nil else { return }
         fadeOutTimer?.invalidate()
         fadeOutTimer = nil
         ticker.level = 1
+        if phase.isBreak, !isPaused { breakSound.level = 1 }
         if phase == .focus, !isPaused { players.forEach { $0.endFade() } }
     }
 }

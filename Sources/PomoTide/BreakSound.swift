@@ -28,6 +28,12 @@ final class BreakSoundPlayer {
         didSet { if fade == nil { engine?.mainMixerNode.outputVolume = Float(volume) } }
     }
 
+    private var source: (any AVAudioMixing)?
+    /// 0...1 on top of `volume`, for the fade-out over the last seconds of a break.
+    var level: Float = 1 {
+        didSet { source?.volume = level }
+    }
+
     func start(_ sound: BreakSound) {
         guard sound != .off else { return stop() }
         if engine != nil, sound == current {
@@ -48,6 +54,8 @@ final class BreakSoundPlayer {
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: buffer.format)
             node.scheduleBuffer(buffer, at: nil, options: .loops)
+            node.volume = level
+            source = node
             engine.mainMixerNode.outputVolume = 0
             do {
                 try engine.start()
@@ -60,6 +68,8 @@ final class BreakSoundPlayer {
             let node = Self.makeNoiseNode(sound, format: format)
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: format)
+            node.volume = level
+            source = node
             engine.mainMixerNode.outputVolume = 0
             do {
                 try engine.start()
@@ -88,6 +98,8 @@ final class BreakSoundPlayer {
         isFadingOut = false
         engine?.stop()
         engine = nil
+        source = nil
+        level = 1
         current = .off
     }
 
