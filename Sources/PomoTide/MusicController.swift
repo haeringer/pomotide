@@ -239,7 +239,14 @@ final class MusicController {
         } else {
             switch app {
             case .appleMusic:
-                tell("set shuffle enabled to \(shuffle)\nplay playlist \"\(Self.escape(playlist))\"")
+                // `play playlist` starts at the first track even with shuffle on. Turning shuffle
+                // on while it plays reshuffles the queue, and `next track` jumps into it. `stop`
+                // first, so a playlist still paused from the last session is not just resumed.
+                let start = "stop\nset shuffle enabled to false\nplay playlist \"\(Self.escape(playlist))\""
+                tell(shuffle ? start + "\nset shuffle enabled to true\nnext track" : start)
+                if let now = tell("get (shuffle enabled as string) & \", \" & name of current track", reportErrors: false) {
+                    Log.music.info("Music: shuffle enabled, current track: \(now, privacy: .public)")
+                }
             case .spotify:
                 tell("set shuffling to \(shuffle)\nplay track \"\(Self.escape(playlist))\"")
             }
