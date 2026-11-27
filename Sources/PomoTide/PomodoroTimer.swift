@@ -185,7 +185,7 @@ final class PomodoroTimer {
 
     // MARK: Cycle
 
-    private func enter(_ next: Phase) {
+    private func enter(_ next: Phase, chime: Bool = true) {
         let previous = phase
         phase = next
         let minutes = switch next {
@@ -198,9 +198,10 @@ final class PomodoroTimer {
         phaseClock = PhaseClock(duration: TimeInterval(max(1, minutes) * 60), start: now)
         Log.timer.info("Entered \(next.title, privacy: .public) for \(max(1, minutes)) min")
         startClock()
-        // Transition sound at the start and the end of every break, not when the first focus starts.
+        // Transition sound at the start and the end of every break, not when the first focus
+        // starts and not when the user skips.
         var tickFadeIn: TimeInterval = 0
-        if previous != .idle, previous.isBreak != next.isBreak {
+        if chime, previous != .idle, previous.isBreak != next.isBreak {
             transition.play(settings.transitionSound, volume: settings.transitionVolume)
             // Let the ticking swell in while the gong or bowl rings out (both last about 6 s).
             if next == .focus { tickFadeIn = 6 }
@@ -214,7 +215,7 @@ final class PomodoroTimer {
         let (next, done) = phase.next(completed: completed, completedFocus: completedFocus,
                                       longBreakEvery: settings.longBreakEnabled ? settings.longBreakEvery : nil)
         completedFocus = done
-        enter(next)
+        enter(next, chime: completed)
     }
 
     private func applyEffects(tickFadeIn: TimeInterval = 0) {
